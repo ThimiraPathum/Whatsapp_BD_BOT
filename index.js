@@ -1,0 +1,285 @@
+'use strict';
+
+/**
+ * index.js — WhatsApp Birthday Bot (Baileys)
+ * University of Colombo, Faculty of Technology — 22/23 Batch
+ */
+
+require('dotenv').config();
+
+const {
+  default: makeWASocket,
+  DisconnectReason,
+  useMultiFileAuthState,
+  downloadMediaMessage,
+} = require('@whiskeysockets/baileys');
+const { Boom } = require('@hapi/boom');
+const qrcode = require('qrcode-terminal');
+const fs = require('fs');
+const path = require('path');
+const pino = require('pino');
+
+const db = require('./src/database');
+const { startScheduler, startDailyPreview } = require('./src/scheduler'); 
+const { handleCommand } = require('./src/commands');
+const { extractBirthdayDetails } = require('./src/vision');
+
+// ─── Config validation ────────────────────────────────────────────────────────
+
+const REQUIRED_ENV = ['GROQ_API_KEY', 'REP_GROUP_ID', 'MAIN_GROUP_ID'];
+const missing = REQUIRED_ENV.filter((k) => !process.env[k]);
+if (missing.length) {
+  console.error('❌ Missing required environment variables:', missing.join(', '));
+  process.exit(1);
+}
+
+const REP_GROUP_ID = process.env.REP_GROUP_ID.trim();
+const MAIN_GROUP_ID = process.env.MAIN_GROUP_ID.trim();
+const TIMEZONE = process.env.TIMEZONE || 'Asia/Colombo';
+
+
+// ─── Caption Builder Helper ───────────────────────────────────────────────────
+
+function buildCaption(name, birthday) {
+  const parts = name.trim().split(/\s+/);
+  let firstName = parts[0];
+
+  for (const part of parts) {
+    if (part.length > 2 && !part.includes('.')) {
+      firstName = part;
+      break;
+    }
+  }
+
+  const template =
+    process.env.BIRTHDAY_CAPTION ||
+    'Happy Birthday, {name}! 🎊\n' +
+    'May your day be as bright and inspiring as your journey at the university. ' +
+    'Wishing you success in your studies, joy in every moment, and strength to achieve all your dreams. ' +
+    'We’re proud to celebrate this special day with you at the university.';
+
+  return template.replace(/\{name\}/gi, firstName).replace(/\{date\}/gi, birthday);
+}
+
+// ─── Baileys connection ───────────────────────────────────────────────────────
+
+let sock;
+
+async function startBot() {
+  const { state, saveCreds } = await useMultiFileAuthState('.baileys_auth');
+
+  sock = makeWASocket({
+    auth: state,
+    printQRInTerminal: false,
+    logger: pino({ level: 'silent' }),
+  });
+
+  sock.ev.on('creds.update', saveCreds);
+
+  sock.ev.on('connection.update', (update) => {
+    const { connection, lastDisconnect, qr } = update;
+
+    if (qr) {
+      console.log('\n📱 Scan this QR code with WhatsApp:\n');
+      qrcode.generate(qr, { small: true });
+    }
+
+    if (connection === 'close') {
+      const shouldReconnect =
+        new Boom(lastDisconnect?.error)?.output?.statusCode !== DisconnectReason.loggedOut;
+      console.warn('⚠️  Connection closed. Reconnecting:', shouldReconnect);
+      if (shouldReconnect) startBot();
+      else console.error('❌ Logged out. Delete .baileys_auth and re-scan.');
+    } else if (connection === 'open') {
+      console.log('✅ WhatsApp client connected & ready!\n');
+      console.log(`   Rep Group  : ${REP_GROUP_ID}`);
+      console.log(`   Main Group : ${MAIN_GROUP_ID}\n`);
+
+      try {
+        const scheduler = startScheduler(sock, MAIN_GROUP_ID);
+        global.__dispatchNow = scheduler.dispatchTodaysPosts;
+        startDailyPreview(sock, REP_GROUP_ID);
+      } catch (err) {
+        console.error('[Scheduler] Error starting scheduler/preview:', err);
+      }
+    }
+  });
+
+  sock.ev.on('messages.upsert', async ({ messages, type }) => {
+    if (type !== 'notify') return;
+
+    for (const msg of messages) {
+      try {
+        await handleIncomingMessage(msg);
+      } catch (err) {
+        console.error('[Bot] Unhandled error in message handler:', err);
+      }
+    }
+  });
+}
+
+// ─── Message handler ──────────────────────────────────────────────────────────
+
+async function handleIncomingMessage(msg) {
+  if (!msg.message || msg.key.fromMe) return;
+
+  const chatId = msg.key.remoteJid;
+  const body =
+    msg.message.conversation ||
+    msg.message.extendedTextMessage?.text ||
+    msg.message.imageMessage?.caption ||
+    '';
+
+  if (body.trim() === '/id') {
+    await sock.sendMessage(chatId, { text: `📌 *Group ID:*\n${chatId}` }, { quoted: msg });
+    return;
+  }
+
+  if (chatId !== REP_GROUP_ID) return;
+
+  const hasImage = !!msg.message.imageMessage;
+  const trimmed = body.trim();
+
+  // 1. අනිත් Commands (/list, /cancel ආදිය - මේවාට ෆොටෝ අවශ්ය නැත)
+  if (trimmed.startsWith('/') && !trimmed.startsWith('/add')) {
+    await handleCommand(sock, chatId, trimmed, global.__dispatchNow);
+    return;
+  }
+
+  // 2. ෆොටෝ එකක් නැතුව නිකම්ම /add ගැහුවොත් බ්ලොක් කිරීම
+  if (trimmed.startsWith('/add') && !hasImage) {
+    await sock.sendMessage(chatId, {
+      text: '⚠️ *Flyer එකක් (Photo) නැහැ!*\n\nඅපි උපන්දින යවන්නේ පින්තූරයක් සමඟ පමණයි. ඒ නිසා කරුණාකර Flyer එක Upload කරන ගමන් එහි *Caption* එකට `/add [නම] | [දිනය]` ලෙස යොදන්න.'
+    }, { quoted: msg });
+    return;
+  }
+
+  // 3. ෆොටෝ එකක් නැත්නම් මෙතනින් නතර වෙනවා
+  if (!hasImage) return;
+
+  // ==========================================
+  // මෙතැන් සිට පහළට යන්නේ ෆොටෝ (Flyers) පමණි!
+  // ==========================================
+
+  let name, birthday;
+  const isManualAdd = trimmed.startsWith('/add');
+
+  // Manual Override (ෆොටෝ එකේ කැප්ෂන් එකට /add ගහලා නම්)
+  if (isManualAdd) {
+    const content = trimmed.replace('/add', '').trim();
+    const parts = content.split('|').map((p) => p.trim());
+    if (parts.length < 2) {
+      await sock.sendMessage(chatId, {
+        text: '⚠️ *ෆෝමැට් එක වැරදියි!*\n\nනිවැරදි ක්රමය: පින්තූරයේ Caption එකට `/add [නම] | [දිනය]` ලෙස ලබාදෙන්න.'
+      }, { quoted: msg });
+      return;
+    }
+    name = parts[0];
+    birthday = parts[1];
+  }
+
+  console.log('[Bot] 📸 Image received in Rep Group. Downloading...');
+  
+  // Loading Message
+  let loadingMsg;
+  if (!isManualAdd) {
+    loadingMsg = await sock.sendMessage(chatId, { text: '🔍 Analysing flyer with AI… please wait.' }, { quoted: msg });
+  } else {
+    loadingMsg = await sock.sendMessage(chatId, { text: '⚙️ Processing manual entry with Flyer...' }, { quoted: msg });
+  }
+
+  // Helper to Edit Loading Message (Prevents "Message Deleted" tombstones)
+  const editLoading = async (newText) => {
+    if (loadingMsg) {
+      try { 
+        await sock.sendMessage(chatId, { text: newText, edit: loadingMsg.key }); 
+      } catch(e) {
+        // Fallback if edit fails
+        await sock.sendMessage(chatId, { text: newText }, { quoted: msg });
+      }
+    } else {
+      await sock.sendMessage(chatId, { text: newText }, { quoted: msg });
+    }
+  };
+
+  // ෆොටෝ එක Download කිරීම
+  let imagePath;
+  try {
+    const buffer = await downloadMediaMessage(msg, 'buffer', {}, { logger: pino({ level: 'silent' }) });
+    const uploadDir = path.join(__dirname, 'downloads');
+    if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+
+    imagePath = path.join(uploadDir, `birthday_${Date.now()}.jpg`);
+    fs.writeFileSync(imagePath, buffer);
+    console.log(`[Bot] ✅ Image downloaded to: ${imagePath}`);
+  } catch (err) {
+    console.error('[Bot] Download failed:', err.message);
+    await editLoading('❌ Could not download the image. Please try again.');
+    return;
+  }
+
+  // AI එකෙන් දත්ත ගැනීම (/add නැතිව නිකම්ම ෆොටෝ එකක් දැම්මොත්)
+  if (!isManualAdd) {
+    const details = await extractBirthdayDetails(imagePath);
+    if (!details) {
+      if (fs.existsSync(imagePath)) fs.unlinkSync(imagePath);
+      await editLoading('⚠️ *Could not extract details from this flyer.*\n\nAI එකට මේ Flyer එක කියවන්න අමාරුයි වගේ. කරුණාකර නැවත ෆොටෝ එක Upload කරන ගමන් Caption එකට `/add [නම] | [දිනය]` ලෙස ලබා දෙන්න.');
+      return;
+    }
+    name = details.name;
+    birthday = details.birthday;
+  }
+
+  // Duplicate Check
+  if (db.postExists({ name, birthday })) {
+    if (fs.existsSync(imagePath)) fs.unlinkSync(imagePath);
+    await editLoading(`⚠️ *Duplicate detected!*\nA post for *${name}* on *${birthday}* is already in the queue.`);
+    return;
+  }
+
+  // ඩේටාබේස් එකට ඇතුළත් කිරීම
+  const id = db.insertPost({
+    name,
+    birthday,
+    imagePath,
+    msgId: msg.key.id,
+    chatId,
+  });
+
+  // Late Dispatch (අද දවසේ උපන්දිනයක් නම්)
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: TIMEZONE }); // YYYY-MM-DD
+
+  if (birthday === today) {
+    try {
+      const caption = buildCaption(name, birthday);
+      await sock.sendMessage(MAIN_GROUP_ID, {
+        image: fs.readFileSync(imagePath),
+        caption,
+      });
+
+      db.markCompleted(id);
+
+      if (fs.existsSync(imagePath)) {
+        try {
+          fs.unlinkSync(imagePath);
+          console.log(`[Bot] 🗑️ Auto-Cleaned up image immediately: ${imagePath}`);
+        } catch (cleanupErr) {}
+      }
+
+      await editLoading(`⚡ *Dispatched Immediately to Main Group!* 🎉\n\n(Since today is ${birthday})\n👤 Name : ${name}\n🆔 ID   : ${id}`);
+    } catch (sendErr) {
+      console.error('[Bot] Immediate dispatch failed:', sendErr);
+      await editLoading(`⚠️ Saved to DB (ID: ${id}) but immediate dispatch failed. Will retry at midnight.`);
+    }
+  } else {
+    // අනාගත උපන්දිනයක් නම් ෂෙඩියුල් කිරීම
+    await editLoading(`✅ *Birthday Scheduled!* 🎂\n\n👤 Name : ${name}\n📅 Date : ${birthday}\n🆔 ID   : ${id}\n\n_Scheduled for 12:00 AM on ${birthday}._`);
+  }
+}
+
+// ─── Start ────────────────────────────────────────────────────────────────────
+
+console.log('🚀 Starting WhatsApp Birthday Bot (Baileys)…');
+startBot();
+
+module.exports = { getSock: () => sock };

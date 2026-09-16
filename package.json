@@ -1,0 +1,32 @@
+{
+  "name": "whatsapp-birthday-bot",
+  "version": "1.0.0",
+  "description": "Automated WhatsApp birthday post scheduler for UColombo FoT 22/23 Batch",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "list-groups": "node tools/list-groups.js",
+    "pm2:start": "pm2 start ecosystem.config.js",
+    "pm2:stop": "pm2 stop birthday-bot",
+    "pm2:logs": "pm2 logs birthday-bot"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "@hapi/boom": "^10.0.1",
+    "@whiskeysockets/baileys": "^7.0.0-rc14",
+    "axios": "^1.20.0",
+    "better-sqlite3": "^13.0.3",
+    "dotenv": "^17.4.2",
+    "groq-sdk": "^1.6.0",
+    "node-cron": "^4.6.0",
+    "pino": "^10.3.1",
+    "qrcode-terminal": "^0.12.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "type": "commonjs"
+}

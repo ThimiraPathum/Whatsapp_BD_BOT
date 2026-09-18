@@ -140,6 +140,41 @@ function getPostById(id) {
     .get(id);
 }
 
+/**
+ * Backup the database file (keeps the last 7 days of backups).
+ */
+function backupDatabase() {
+  try {
+    const backupDir = path.join(__dirname, '..', 'data', 'backups');
+    if (!fs.existsSync(backupDir)) {
+      fs.mkdirSync(backupDir, { recursive: true });
+    }
+
+    const dateStr = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    const backupPath = path.join(backupDir, `birthdays_${dateStr}.db`);
+
+    // Copy the database file
+    fs.copyFileSync(DB_PATH, backupPath);
+    console.log(`[Database] Backup created at: ${backupPath}`);
+
+    // Delete backups older than 7 days
+    const files = fs.readdirSync(backupDir);
+    const now = Date.now();
+    const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
+
+    files.forEach(file => {
+      const filePath = path.join(backupDir, file);
+      const stats = fs.statSync(filePath);
+      if (now - stats.mtimeMs > SEVEN_DAYS) {
+        fs.unlinkSync(filePath);
+        console.log(`[Database] Deleted old backup: ${file}`);
+      }
+    });
+  } catch (err) {
+    console.error(`[Database] Backup failed:`, err);
+  }
+}
+
 module.exports = {
   insertPost,
   getPendingForToday,
@@ -149,4 +184,5 @@ module.exports = {
   listPending,
   cancelPost,
   getPostById,
+  backupDatabase,
 };

@@ -126,6 +126,16 @@ function startScheduler(sock, mainGroupId) {
   job.start();
   console.log(`[Scheduler] Midnight dispatch job registered (TZ: ${TIMEZONE})`);
 
+  // 🔴 අලුත්: Database Auto Backup Job
+  const backupJob = cron.schedule('5 0 * * *', () => {
+    console.log(`[Scheduler] Running daily database backup...`);
+    db.backupDatabase();
+  }, {
+    timezone: TIMEZONE,
+  });
+  backupJob.start();
+  console.log(`[Scheduler] Daily database backup job registered (00:05 AM)`);
+
   return { dispatchTodaysPosts: () => dispatchTodaysPosts(sock, mainGroupId) };
 }
 

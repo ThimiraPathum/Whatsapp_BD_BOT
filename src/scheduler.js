@@ -139,22 +139,22 @@ function startScheduler(sock, mainGroupId) {
   return { dispatchTodaysPosts: () => dispatchTodaysPosts(sock, mainGroupId) };
 }
 
-// 🔴 අලුත්: Daily Preview (සෑම දිනකම රාත්‍රී 9:00 ට)
+// 🔴 New: Daily Preview (9:00 PM every day)
 function startDailyPreview(sock, repGroupId) {
   // "0 21 * * *" = 9:00 PM every day
   const job = cron.schedule('0 21 * * *', async () => {
     try {
-      // අද රාත්‍රී 12 ට යන්නේ "හෙට" උපන්දින තියෙන අයගේ ඒවා. ඒ නිසා හෙට දිනය ගණනය කිරීම:
+      // Tomorrow's date calculation
       const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
       const tomorrowStr = tomorrow.toLocaleDateString('en-CA', { timeZone: TIMEZONE });
 
       const upcoming = db.getPendingForToday(tomorrowStr);
 
       let msg = '🔔 *Midnight Dispatch Preview!* 🔔\n\n';
-      msg += `අද රාත්‍රී 12:00 ට Main Group එකට ස්වයංක්‍රීයව යැවීමට සූදානම් කර ඇති උපන්දින:\n\n`;
+      msg += `Birthdays scheduled to be automatically dispatched to the Main Group tonight at 12:00 AM:\n\n`;
 
       if (upcoming.length === 0) {
-        msg += '➖ _අද රාත්‍රී 12 ට යැවීමට කිසිවක් ෂෙඩියුල් කර නැත._\n\n';
+        msg += '➖ _No birthdays scheduled for tonight._\n\n';
       } else {
         upcoming.forEach((p, i) => { 
           msg += `${i + 1}. *${p.name}* (ID: ${p.id})\n`; 
@@ -162,8 +162,7 @@ function startDailyPreview(sock, repGroupId) {
         msg += '\n';
       }
       
-      // 🔴 අලුත් වෙනස: ඉතුරු ටික අයින් කරලා Piyumal ව contact කරන්න කියලා විතරක් දැමීම
-      msg += '⚠️ *මේ ලැයිස්තුවේ අඩුවක් හෝ වෙනසක් කරන්න තියෙනවා නම්, කරුණාකර අද රාත්‍රී 12 ට පෙර Piyumal ව contact කරන්න!*';
+      msg += '⚠️ *If there are any errors or missing birthdays in this list, please contact Piyumal before 12:00 AM tonight!*';
 
       await sock.sendMessage(repGroupId, { text: msg });
       console.log(`[Scheduler] 🔔 Daily preview sent to Reps for ${tomorrowStr}.`);

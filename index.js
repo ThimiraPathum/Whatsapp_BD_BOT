@@ -133,7 +133,7 @@ async function startBot() {
             if (post && post.image_path && fs.existsSync(post.image_path)) {
               try { fs.unlinkSync(post.image_path); } catch (e) {}
             }
-            await sock.sendMessage(msg.key.remoteJid, { text: `🗑️ ID: ${reactionData.postId} සහිත පෝස්ට් එක මකා දමන ලදී.` });
+            await sock.sendMessage(msg.key.remoteJid, { text: `🗑️ Post with ID: ${reactionData.postId} has been deleted.` });
           }
         }
         continue; // Skip further processing for reactions
@@ -210,7 +210,7 @@ async function handleIncomingMessage(msg) {
   // 2. ෆොටෝ එකක් නැතුව නිකම්ම /add ගැහුවොත් බ්ලොක් කිරීම
   if (trimmed.startsWith('/add') && !hasImage) {
     await sock.sendMessage(chatId, {
-      text: '⚠️ *Flyer එකක් (Photo) නැහැ!*\n\nඅපි උපන්දින යවන්නේ පින්තූරයක් සමඟ පමණයි. ඒ නිසා කරුණාකර Flyer එක Upload කරන ගමන් එහි *Caption* එකට `/add [නම] | [දිනය]` ලෙස යොදන්න.'
+      text: '⚠️ *Flyer (Photo) missing!*\n\nWe only accept birthdays with a picture. Please upload the flyer and set the *Caption* to `/add [Name] | [Date]`.'
     }, { quoted: msg });
     return;
   }
@@ -231,7 +231,7 @@ async function handleIncomingMessage(msg) {
     const parts = content.split('|').map((p) => p.trim());
     if (parts.length < 2) {
       await sock.sendMessage(chatId, {
-        text: '⚠️ *ෆෝමැට් එක වැරදියි!*\n\nනිවැරදි ක්රමය: පින්තූරයේ Caption එකට `/add [නම] | [දිනය]` ලෙස ලබාදෙන්න.'
+        text: '⚠️ *Invalid Format!*\n\nCorrect format: Add `/add [Name] | [Date]` as the caption of the picture.'
       }, { quoted: msg });
       return;
     }
@@ -284,7 +284,7 @@ async function handleIncomingMessage(msg) {
     const details = await extractBirthdayDetails(imagePath);
     if (!details) {
       if (fs.existsSync(imagePath)) fs.unlinkSync(imagePath);
-      await editLoading('⚠️ *Could not extract details from this flyer.*\n\nAI එකට මේ Flyer එක කියවන්න අමාරුයි වගේ. කරුණාකර නැවත ෆොටෝ එක Upload කරන ගමන් Caption එකට `/add [නම] | [දිනය]` ලෙස ලබා දෙන්න.');
+      await editLoading('⚠️ *Could not extract details from this flyer.*\n\nThe AI could not read the flyer properly. Please re-upload the photo and add `/add [Name] | [Date]` as the caption.');
       return;
     }
     name = details.name;
@@ -313,11 +313,11 @@ async function handleIncomingMessage(msg) {
   if (birthday === today) {
     try {
       const reactionMsg = await sock.sendMessage(chatId, {
-        text: `⚠️ *අද දවසේ උපන්දිනයක්!*\n\n👤 Name: ${name}\n🆔 ID: ${id}\n\nමේක දැන්ම Main Group එකට යවන්න ඕනෙද?\n\n👍 - අනුමත කර දැන්ම යවන්න\n❌ - මකා දමන්න`
+        text: `⚠️ *Birthday is TODAY!*\n\n👤 Name: ${name}\n🆔 ID: ${id}\n\nDo you want to dispatch this to the Main Group right now?\n\n👍 - Approve & Send Immediately\n❌ - Delete Post`
       });
       reactionCache.set(reactionMsg.key.id, { postId: id });
       
-      await editLoading(`✅ *Saved!* (ID: ${id})\n\nමේක අද දවසේ උපන්දිනයක් නිසා Main Group එකට යවන්න අර පල්ලෙහා තියෙන මැසේජ් එකට 👍 රිඇක්ට් කරන්න. ☝️`);
+      await editLoading(`✅ *Saved!* (ID: ${id})\n\nSince this birthday is for today, please react with 👍 to the message below to approve and dispatch it to the Main Group. ☝️`);
     } catch (err) {
       console.error('[Bot] Failed to send reaction message:', err);
       await editLoading(`⚠️ Saved to DB (ID: ${id}) but could not send the Poll.`);

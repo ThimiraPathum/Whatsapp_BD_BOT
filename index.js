@@ -12,6 +12,7 @@ const {
   DisconnectReason,
   useMultiFileAuthState,
   downloadMediaMessage,
+  getAggregateVotesInPollMessage,
 } = require('@whiskeysockets/baileys');
 const { Boom } = require('@hapi/boom');
 const qrcode = require('qrcode-terminal');
@@ -36,6 +37,8 @@ if (missing.length) {
 const REP_GROUP_ID = process.env.REP_GROUP_ID.trim();
 const MAIN_GROUP_ID = process.env.MAIN_GROUP_ID.trim();
 const TIMEZONE = process.env.TIMEZONE || 'Asia/Colombo';
+
+const pollCache = new Map(); // Cache for poll creation messages
 
 
 // ─── Caption Builder Helper ───────────────────────────────────────────────────
@@ -116,6 +119,70 @@ async function startBot() {
       }
     }
   });
+
+  sock.ev.on('messages.update', async (events) => {
+    if (events[0]?.update?.status) {
+      // ignore status updates to avoid noise
+      return;
+    }
+
+    for (const { key, update } of events) {
+      if (update.pollUpdates) {
+        const pollData = pollCache.get(key.id);
+        if (pollData) {
+          const pollVote = getAggregateVotesInPollMessage({
+            message: pollData.pollMsg.message,
+            pollUpdates: update.pollUpdates,
+          });
+          
+          const approveOption = pollVote.find(v => v.name === '✅ Approve & Send');
+          const cancelOption = pollVote.find(v => v.name === '❌ Cancel');
+
+          if (approveOption && approveOption.voters.length > 0) {
+            console.log(`[Bot] Poll approved for ID: ${pollData.postId}`);
+            pollCache.delete(key.id);
+            await dispatchApprovedPost(sock, pollData.postId, key.remoteJid);
+          } else if (cancelOption && cancelOption.voters.length > 0) {
+            console.log(`[Bot] Poll canceled for ID: ${pollData.postId}`);
+            pollCache.delete(key.id);
+            
+            const post = db.getPostById(pollData.postId);
+            db.cancelPost(pollData.postId);
+            if (post && post.image_path && fs.existsSync(post.image_path)) {
+              try { fs.unlinkSync(post.image_path); } catch (e) {}
+            }
+            await sock.sendMessage(key.remoteJid, { text: `🗑️ ID: ${pollData.postId} සහිත පෝස්ට් එක මකා දමන ලදී.` });
+          }
+        }
+      }
+    }
+  });
+}
+
+// ─── Dispatch helper for Polls ────────────────────────────────────────────────
+
+async function dispatchApprovedPost(sock, postId, repChatId) {
+  const post = db.getPostById(postId);
+  if (!post || post.status !== 'pending') return;
+
+  try {
+    const caption = buildCaption(post.name, post.birthday);
+    await sock.sendMessage(MAIN_GROUP_ID, {
+      image: fs.readFileSync(post.image_path),
+      caption,
+    });
+
+    db.markCompleted(postId);
+
+    if (fs.existsSync(post.image_path)) {
+      try { fs.unlinkSync(post.image_path); } catch (e) {}
+    }
+
+    await sock.sendMessage(repChatId, { text: `⚡ *Dispatched Immediately to Main Group!* 🎉\n\n👤 Name : ${post.name}\n🆔 ID   : ${postId}` });
+  } catch (err) {
+    console.error('[Bot] Poll dispatch failed:', err);
+    await sock.sendMessage(repChatId, { text: `⚠️ Saved to DB (ID: ${postId}) but immediate dispatch failed. Will retry at midnight.` });
+  }
 }
 
 // ─── Message handler ──────────────────────────────────────────────────────────
@@ -251,25 +318,19 @@ async function handleIncomingMessage(msg) {
 
   if (birthday === today) {
     try {
-      const caption = buildCaption(name, birthday);
-      await sock.sendMessage(MAIN_GROUP_ID, {
-        image: fs.readFileSync(imagePath),
-        caption,
+      const pollMsg = await sock.sendMessage(chatId, {
+        poll: {
+          name: `⚠️ *අද දවසේ උපන්දිනයක්!*\n\n👤 Name: ${name}\n🆔 ID: ${id}\n\nමේක දැන්ම Main Group එකට යවන්න ඕනෙද?`,
+          values: ['✅ Approve & Send', '❌ Cancel'],
+          selectableCount: 1
+        }
       });
-
-      db.markCompleted(id);
-
-      if (fs.existsSync(imagePath)) {
-        try {
-          fs.unlinkSync(imagePath);
-          console.log(`[Bot] 🗑️ Auto-Cleaned up image immediately: ${imagePath}`);
-        } catch (cleanupErr) {}
-      }
-
-      await editLoading(`⚡ *Dispatched Immediately to Main Group!* 🎉\n\n(Since today is ${birthday})\n👤 Name : ${name}\n🆔 ID   : ${id}`);
-    } catch (sendErr) {
-      console.error('[Bot] Immediate dispatch failed:', sendErr);
-      await editLoading(`⚠️ Saved to DB (ID: ${id}) but immediate dispatch failed. Will retry at midnight.`);
+      pollCache.set(pollMsg.key.id, { pollMsg, postId: id });
+      
+      await editLoading(`✅ *Saved!* (ID: ${id})\n\nමේක අද දවසේ උපන්දිනයක් නිසා Main Group එකට යවන්න අර පල්ලෙහා තියෙන Poll එකෙන් Approve කරන්න. ☝️`);
+    } catch (err) {
+      console.error('[Bot] Failed to send poll:', err);
+      await editLoading(`⚠️ Saved to DB (ID: ${id}) but could not send the Poll.`);
     }
   } else {
     // අනාගත උපන්දිනයක් නම් ෂෙඩියුල් කිරීම

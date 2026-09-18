@@ -123,7 +123,7 @@ async function startBot() {
           if (emoji === '👍') {
             console.log(`[Bot] Reaction approved for ID: ${reactionData.postId}`);
             reactionCache.delete(reactedMsgId);
-            await dispatchApprovedPost(sock, reactionData.postId, msg.key.remoteJid);
+            await dispatchApprovedPost(sock, reactionData.postId, msg.key.remoteJid, reactionData.originalKey);
           } else if (emoji === '❌') {
             console.log(`[Bot] Reaction canceled for ID: ${reactionData.postId}`);
             reactionCache.delete(reactedMsgId);
@@ -134,7 +134,12 @@ async function startBot() {
               try { fs.unlinkSync(post.image_path); } catch (e) {}
             }
             const deletedMsg = `╭━━━ 🗑️ POST DELETED ━━━╮\n\nThe birthday post has been removed from the queue.\n\n👤 Name: ${post ? post.name : 'Unknown'}\n🆔 Post ID: #${reactionData.postId}\n\n━━━━━━━━━━━━━━━━━━\n✅ Status: Deleted`;
-            await sock.sendMessage(msg.key.remoteJid, { text: deletedMsg });
+            
+            if (reactionData.originalKey) {
+              await sock.sendMessage(msg.key.remoteJid, { text: deletedMsg, edit: reactionData.originalKey });
+            } else {
+              await sock.sendMessage(msg.key.remoteJid, { text: deletedMsg });
+            }
           }
         }
         continue; // Skip further processing for reactions
@@ -156,7 +161,7 @@ async function startBot() {
 
 // ─── Dispatch helper for Polls ────────────────────────────────────────────────
 
-async function dispatchApprovedPost(sock, postId, repChatId) {
+async function dispatchApprovedPost(sock, postId, repChatId, editKey = null) {
   const post = db.getPostById(postId);
   if (!post || post.status !== 'pending') return;
 
@@ -174,10 +179,18 @@ async function dispatchApprovedPost(sock, postId, repChatId) {
     }
 
     const dispatchMsg = `╭━━━ ⚡ DISPATCHED ━━━╮\n\n🎉 Birthday sent successfully to the Main Group.\n\n👤 Name: ${post.name}\n🆔 Post ID: #${postId}\n\n━━━━━━━━━━━━━━━━━━\n✅ Status: Dispatched Immediately`;
-    await sock.sendMessage(repChatId, { text: dispatchMsg });
+    if (editKey) {
+      await sock.sendMessage(repChatId, { text: dispatchMsg, edit: editKey });
+    } else {
+      await sock.sendMessage(repChatId, { text: dispatchMsg });
+    }
   } catch (err) {
     console.error('[Bot] Poll dispatch failed:', err);
-    await sock.sendMessage(repChatId, { text: `⚠️ Saved to DB (ID: ${postId}) but immediate dispatch failed. Will retry at midnight.` });
+    if (editKey) {
+      await sock.sendMessage(repChatId, { text: `⚠️ Saved to DB (ID: #${postId}) but immediate dispatch failed. Will retry at midnight.`, edit: editKey });
+    } else {
+      await sock.sendMessage(repChatId, { text: `⚠️ Saved to DB (ID: #${postId}) but immediate dispatch failed. Will retry at midnight.` });
+    }
   }
 }
 
@@ -314,12 +327,10 @@ async function handleIncomingMessage(msg) {
 
   if (birthday === today) {
     try {
-      const msg2 = `╭━━━ 🚨 BIRTHDAY TODAY ━━━╮\n\n👤 Name: ${name}\n🆔 Post ID: #${id}\n\n━━━━━━━━━━━━━━━━━━\n\n❓ Dispatch this birthday to the Main Group now?\n\n👍 Approve & Send Immediately\n❌ Delete This Post\n\n━━━━━━━━━━━━━━━━━━\n\nReact to this message with your choice.`;
-      const reactionMsg = await sock.sendMessage(chatId, { text: msg2 });
-      reactionCache.set(reactionMsg.key.id, { postId: id });
+      const urgentMsg = `╭━━━ 🚨 BIRTHDAY TODAY ━━━╮\n\n👤 Name: ${name}\n🆔 Post ID: #${id}\n\n🎂 This birthday is scheduled for TODAY.\n\n━━━━━━━━━━━━━━━━━━\n\n❓ Dispatch this birthday to the Main Group now?\n\n👍 Approve & Send Immediately\n❌ Delete This Post\n\n━━━━━━━━━━━━━━━━━━\n\n⚠️ React to this message with your choice.\nThe post will not be dispatched until it is approved.`;
       
-      const msg1 = `╭━━━ ✅ BIRTHDAY SAVED ━━━╮\n\n🆔 Post ID: #${id}\n\n🎂 This birthday is scheduled for TODAY.\n\n⚠️ Action Required\n\nPlease react with 👍 to the approval message below to dispatch this birthday to the Main Group immediately.\n\nThe post will not be dispatched until it is approved.`;
-      await editLoading(msg1);
+      await editLoading(urgentMsg);
+      reactionCache.set(loadingMsg.key.id, { postId: id, originalKey: loadingMsg.key });
     } catch (err) {
       console.error('[Bot] Failed to send reaction message:', err);
       await editLoading(`⚠️ Saved to DB (ID: ${id}) but could not send the Poll.`);

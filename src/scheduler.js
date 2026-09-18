@@ -150,19 +150,16 @@ function startDailyPreview(sock, repGroupId) {
 
       const upcoming = db.getPendingForToday(tomorrowStr);
 
-      let msg = '🔔 *Midnight Dispatch Preview!* 🔔\n\n';
-      msg += `Birthdays scheduled to be automatically dispatched to the Main Group tonight at 12:00 AM:\n\n`;
-
+      let msg = '';
       if (upcoming.length === 0) {
-        msg += '➖ _No birthdays scheduled for tonight._\n\n';
+        msg = `╭━━━ 🌙 MIDNIGHT PREVIEW ━━━╮\n\n📅 Tonight's Automatic Dispatch\n\n🕛 12:00 AM\n\n━━━━━━━━━━━━━━━━━━\n\n🎂 Scheduled Birthdays\n\n➖ No birthdays scheduled for tonight.\n\n━━━━━━━━━━━━━━━━━━\n\n⚠️ Please Review\n\nIf you believe a birthday is missing, please contact Piyumal before 12:00 AM.\n\n✅ No automatic birthday posts are currently scheduled.`;
       } else {
+        msg = `╭━━━ 🌙 MIDNIGHT PREVIEW ━━━╮\n\n📅 Tonight's Automatic Dispatch\n\nThe following birthdays will be sent to the Main Group at:\n\n🕛 12:00 AM\n\n━━━━━━━━━━━━━━━━━━\n\n🎂 Scheduled Birthdays\n\n`;
         upcoming.forEach((p, i) => { 
-          msg += `${i + 1}. *${p.name}* (ID: ${p.id})\n`; 
+          msg += `${i + 1}. 👤 ${p.name}\n　 🆔 ID: #${p.id}\n\n`; 
         });
-        msg += '\n';
+        msg += `━━━━━━━━━━━━━━━━━━\n\n⚠️ Please Review\n\nIf any birthday is missing or incorrect, please contact Piyumal before 12:00 AM.\n\nThis is an automatic dispatch. No action is required if everything is correct.`;
       }
-      
-      msg += '⚠️ *If there are any errors or missing birthdays in this list, please contact Piyumal before 12:00 AM tonight!*';
 
       await sock.sendMessage(repGroupId, { text: msg });
       console.log(`[Scheduler] 🔔 Daily preview sent to Reps for ${tomorrowStr}.`);

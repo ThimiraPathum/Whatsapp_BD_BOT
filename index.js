@@ -133,7 +133,8 @@ async function startBot() {
             if (post && post.image_path && fs.existsSync(post.image_path)) {
               try { fs.unlinkSync(post.image_path); } catch (e) {}
             }
-            await sock.sendMessage(msg.key.remoteJid, { text: `🗑️ Post with ID: ${reactionData.postId} has been deleted.` });
+            const deletedMsg = `╭━━━ 🗑️ POST DELETED ━━━╮\n\nThe birthday post has been removed from the queue.\n\n👤 Name: ${post ? post.name : 'Unknown'}\n🆔 Post ID: #${reactionData.postId}\n\n━━━━━━━━━━━━━━━━━━\n✅ Status: Deleted`;
+            await sock.sendMessage(msg.key.remoteJid, { text: deletedMsg });
           }
         }
         continue; // Skip further processing for reactions
@@ -172,7 +173,8 @@ async function dispatchApprovedPost(sock, postId, repChatId) {
       try { fs.unlinkSync(post.image_path); } catch (e) {}
     }
 
-    await sock.sendMessage(repChatId, { text: `⚡ *Dispatched Immediately to Main Group!* 🎉\n\n👤 Name : ${post.name}\n🆔 ID   : ${postId}` });
+    const dispatchMsg = `╭━━━ ⚡ DISPATCHED ━━━╮\n\n🎉 Birthday sent successfully to the Main Group.\n\n👤 Name: ${post.name}\n🆔 Post ID: #${postId}\n\n━━━━━━━━━━━━━━━━━━\n✅ Status: Dispatched Immediately`;
+    await sock.sendMessage(repChatId, { text: dispatchMsg });
   } catch (err) {
     console.error('[Bot] Poll dispatch failed:', err);
     await sock.sendMessage(repChatId, { text: `⚠️ Saved to DB (ID: ${postId}) but immediate dispatch failed. Will retry at midnight.` });
@@ -209,9 +211,8 @@ async function handleIncomingMessage(msg) {
 
   // 2. ෆොටෝ එකක් නැතුව නිකම්ම /add ගැහුවොත් බ්ලොක් කිරීම
   if (trimmed.startsWith('/add') && !hasImage) {
-    await sock.sendMessage(chatId, {
-      text: '⚠️ *Flyer (Photo) missing!*\n\nWe only accept birthdays with a picture. Please upload the flyer and set the *Caption* to `/add [Name] | [Date]`.'
-    }, { quoted: msg });
+    const flyerMissingMsg = `╭━━━ 📸 FLYER REQUIRED ━━━╮\n\nA birthday flyer/photo is required to create a birthday post.\n\nPlease upload the flyer and use this caption:\n\n/add [Name] | [Date]\n\n💡 Example:\n/add Kasun | 2026-09-18\n\n━━━━━━━━━━━━━━━━━━\n❌ Text-only birthday posts are not accepted.`;
+    await sock.sendMessage(chatId, { text: flyerMissingMsg }, { quoted: msg });
     return;
   }
 
@@ -230,9 +231,8 @@ async function handleIncomingMessage(msg) {
     const content = trimmed.replace('/add', '').trim();
     const parts = content.split('|').map((p) => p.trim());
     if (parts.length < 2) {
-      await sock.sendMessage(chatId, {
-        text: '⚠️ *Invalid Format!*\n\nCorrect format: Add `/add [Name] | [Date]` as the caption of the picture.'
-      }, { quoted: msg });
+      const invalidFormatMsg = `╭━━━ ⚠️ INVALID FORMAT ━━━╮\n\nThe AI could not extract the birthday details from this flyer.\n\n📸 Please re-upload the flyer.\n\nIf the problem continues, add the following as the caption:\n\n/add [Name] | [Date]\n\n💡 Example:\n/add Kasun | 2026-09-18\n\n━━━━━━━━━━━━━━━━━━\n🔄 Please try again.`;
+      await sock.sendMessage(chatId, { text: invalidFormatMsg }, { quoted: msg });
       return;
     }
     name = parts[0];
@@ -284,7 +284,8 @@ async function handleIncomingMessage(msg) {
     const details = await extractBirthdayDetails(imagePath);
     if (!details) {
       if (fs.existsSync(imagePath)) fs.unlinkSync(imagePath);
-      await editLoading('⚠️ *Could not extract details from this flyer.*\n\nThe AI could not read the flyer properly. Please re-upload the photo and add `/add [Name] | [Date]` as the caption.');
+      const aiFailedMsg = `╭━━━ ⚠️ FLYER NOT READ ━━━╮\n\nThe AI could not extract the birthday details from this flyer.\n\n📸 Please re-upload the flyer.\n\nIf the problem continues, add the following as the caption:\n\n/add [Name] | [Date]\n\n💡 Example:\n/add Kasun | 2026-09-18\n\n━━━━━━━━━━━━━━━━━━\n🔄 Please try again.`;
+      await editLoading(aiFailedMsg);
       return;
     }
     name = details.name;
@@ -294,7 +295,8 @@ async function handleIncomingMessage(msg) {
   // Duplicate Check
   if (db.postExists({ name, birthday })) {
     if (fs.existsSync(imagePath)) fs.unlinkSync(imagePath);
-    await editLoading(`⚠️ *Duplicate detected!*\nA post for *${name}* on *${birthday}* is already in the queue.`);
+    const duplicateMsg = `╭━━━ ⚠️ DUPLICATE DETECTED ━━━╮\n\nA birthday with the same details already exists in the queue.\n\n👤 Name: ${name}\n📅 Date: ${birthday}\n\n━━━━━━━━━━━━━━━━━━\n🚫 No new post was created.\n\nThe existing birthday remains in the queue.`;
+    await editLoading(duplicateMsg);
     return;
   }
 
@@ -312,19 +314,20 @@ async function handleIncomingMessage(msg) {
 
   if (birthday === today) {
     try {
-      const reactionMsg = await sock.sendMessage(chatId, {
-        text: `⚠️ *Birthday is TODAY!*\n\n👤 Name: ${name}\n🆔 ID: ${id}\n\nDo you want to dispatch this to the Main Group right now?\n\n👍 - Approve & Send Immediately\n❌ - Delete Post`
-      });
+      const msg2 = `╭━━━ 🚨 BIRTHDAY TODAY ━━━╮\n\n👤 Name: ${name}\n🆔 Post ID: #${id}\n\n━━━━━━━━━━━━━━━━━━\n\n❓ Dispatch this birthday to the Main Group now?\n\n👍 Approve & Send Immediately\n❌ Delete This Post\n\n━━━━━━━━━━━━━━━━━━\n\nReact to this message with your choice.`;
+      const reactionMsg = await sock.sendMessage(chatId, { text: msg2 });
       reactionCache.set(reactionMsg.key.id, { postId: id });
       
-      await editLoading(`✅ *Saved!* (ID: ${id})\n\nSince this birthday is for today, please react with 👍 to the message below to approve and dispatch it to the Main Group. ☝️`);
+      const msg1 = `╭━━━ ✅ BIRTHDAY SAVED ━━━╮\n\n🆔 Post ID: #${id}\n\n🎂 This birthday is scheduled for TODAY.\n\n⚠️ Action Required\n\nPlease react with 👍 to the approval message below to dispatch this birthday to the Main Group immediately.\n\nThe post will not be dispatched until it is approved.`;
+      await editLoading(msg1);
     } catch (err) {
       console.error('[Bot] Failed to send reaction message:', err);
       await editLoading(`⚠️ Saved to DB (ID: ${id}) but could not send the Poll.`);
     }
   } else {
     // අනාගත උපන්දිනයක් නම් ෂෙඩියුල් කිරීම
-    await editLoading(`✅ *Birthday Scheduled!* 🎂\n\n👤 Name : ${name}\n📅 Date : ${birthday}\n🆔 ID   : ${id}\n\n_Scheduled for 12:00 AM on ${birthday}._`);
+    const futureMsg = `╭━━━ 🎂 BIRTHDAY SCHEDULED ━━━╮\n\n👤 Name: ${name}\n📅 Date: ${birthday}\n🆔 Post ID: #${id}\n\n━━━━━━━━━━━━━━━━━━\n\n🕛 Automatic Dispatch\nScheduled for 12:00 AM on ${birthday}.\n\n✅ Status: Added to the birthday queue`;
+    await editLoading(futureMsg);
   }
 }
 

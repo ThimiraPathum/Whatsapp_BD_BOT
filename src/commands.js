@@ -57,29 +57,57 @@ async function handleCommand(sock, chatId, text, dispatchNowFunction) {
 }
 
 async function showHelpMenu(sock, chatId) {
-  const menu = `
-🤖 *Birthday Bot Commands* 🤖
+  const menu = `╭━━━ 🤖 BIRTHDAY BOT ━━━╮
+　　　　　Command Guide
 
-🔹 */add [Name] | [Date]*
-(With photo only) If AI fails to extract details, add this command as the caption of the flyer.
-Ex: \`/add Kasun | 2026-09-18\`
+━━━━━━━━━━━━━━━━━━
 
-🔹 */list* or */pending*
-View all upcoming scheduled birthdays.
+🎂 BIRTHDAY MANAGEMENT
 
-🔹 */today*
-View today's scheduled birthdays.
+🔹 /add [Name] | [Date]
+Add a birthday using a flyer.
 
-🔹 */cancel [ID]*
-Delete a scheduled post by ID.
-Ex: \`/cancel 5\`
+📸 Photo required
 
-🔹 */dispatch*
-Manually dispatch today's posts to the Main Group immediately.
+Use this caption if the AI cannot read the flyer.
 
-🔹 */id*
+Example:
+/add Kasun | 2026-09-18
+
+━━━━━━━━━━━━━━━━━━
+
+📋 VIEW BIRTHDAYS
+
+🔹 /list or /pending
+View all upcoming birthdays.
+
+🔹 /today
+View today's birthdays.
+
+━━━━━━━━━━━━━━━━━━
+
+🛠️ POST ACTIONS
+
+🔹 /cancel [ID]
+Delete a scheduled birthday.
+
+Example:
+/cancel 5
+
+🔹 /dispatch
+Dispatch today's birthdays to the Main Group immediately.
+
+━━━━━━━━━━━━━━━━━━
+
+ℹ️ BOT INFORMATION
+
+🔹 /id
 Get the current Group ID.
-`;
+
+━━━━━━━━━━━━━━━━━━
+
+🤖 Birthday Bot
+Your automated birthday scheduling assistant.`;
   await sock.sendMessage(chatId, { text: menu.trim() });
 }
 
@@ -87,14 +115,19 @@ async function listPendingPosts(sock, chatId) {
   const pending = db.listPending();
   
   if (pending.length === 0) {
-    await sock.sendMessage(chatId, { text: '✅ No posts are currently scheduled.' });
+    await sock.sendMessage(chatId, { text: '╭━━━ 📅 UPCOMING BIRTHDAYS ━━━╮\n　　　　　Pending Queue\n\n━━━━━━━━━━━━━━━━━━\n\n✅ No posts are currently scheduled.' });
     return;
   }
 
-  let msg = '📅 *Upcoming Birthdays (Pending):*\n\n';
-  pending.forEach(p => {
-    msg += `🆔 ID: ${p.id}\n👤 Name: ${p.name}\n📆 Date: ${p.birthday}\n\n`;
+  let msg = `╭━━━ 📅 UPCOMING BIRTHDAYS ━━━╮\n　　　　　Pending Queue\n\n━━━━━━━━━━━━━━━━━━\n\n`;
+  pending.forEach((p, i) => {
+    msg += `🆔 #${p.id}\n👤 ${p.name}\n📅 ${p.birthday}\n\n`;
+    if (i !== pending.length - 1) {
+      msg += `──────────────────\n\n`;
+    }
   });
+  
+  msg += `━━━━━━━━━━━━━━━━━━\n\n📌 Total Pending: ${pending.length}\n\nThese birthdays are waiting for their scheduled dispatch.`;
 
   await sock.sendMessage(chatId, { text: msg.trim() });
 }
@@ -104,16 +137,16 @@ async function showTodaysBirthdays(sock, chatId) {
   const todaysPosts = db.getPendingForToday(today);
 
   if (todaysPosts.length === 0) {
-    await sock.sendMessage(chatId, { text: `📅 *Today (${today})*\n\nNo birthdays scheduled for today.` });
+    await sock.sendMessage(chatId, { text: `╭━━━ 🎂 TODAY'S BIRTHDAYS ━━━╮\n\n📅 ${today}\n\n━━━━━━━━━━━━━━━━━━\n\n✅ No birthdays scheduled for today.` });
     return;
   }
 
-  let msg = `📅 *Today's Birthdays (${today}):*\n\n`;
+  let msg = `╭━━━ 🎂 TODAY'S BIRTHDAYS ━━━╮\n\n📅 ${today}\n\n━━━━━━━━━━━━━━━━━━\n\n`;
   todaysPosts.forEach(p => {
-    msg += `🆔 ID: ${p.id} - ${p.name}\n`;
+    msg += `🆔 #${p.id} — 👤 ${p.name}\n`;
   });
   
-  msg += `\n_These will be dispatched to the Main Group tonight at 12:00 AM (or via /dispatch)._`;
+  msg += `\n━━━━━━━━━━━━━━━━━━\n\n🕛 Automatic Dispatch: 12:00 AM\n\n⚡ Use /dispatch to send today's birthdays immediately.`;
 
   await sock.sendMessage(chatId, { text: msg.trim() });
 }
@@ -139,7 +172,8 @@ async function cancelPost(sock, chatId, idStr) {
         fs.unlinkSync(post.image_path);
       } catch (err) {}
     }
-    await sock.sendMessage(chatId, { text: `🗑️ *Post successfully deleted!*\n\n🆔 ID: ${id}\n👤 Name: ${post.name}\n📅 Date: ${post.birthday}` });
+    const cancelMsg = `╭━━━ 🗑️ POST DELETED ━━━╮\n\nThe scheduled birthday has been successfully deleted.\n\n🆔 Post ID: #${id}\n👤 Name: ${post.name}\n📅 Date: ${post.birthday}\n\n━━━━━━━━━━━━━━━━━━\n✅ Status: Successfully Deleted`;
+    await sock.sendMessage(chatId, { text: cancelMsg });
     console.log(`[Commands] Canceled post ID: ${id} and deleted image.`);
   } else {
     await sock.sendMessage(chatId, { text: `⚠️ Could not find a pending post with ID: ${id}.` });

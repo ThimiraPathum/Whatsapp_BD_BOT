@@ -41,12 +41,15 @@ async function handleCommand(sock, chatId, text, dispatchNowFunction) {
       break;
 
     case '/dispatch':
-      await sock.sendMessage(chatId, { text: '⚡ *Manual Dispatch Started!* Sending tonight\'s posts to the Main Group...' });
-      if (dispatchNowFunction) {
-        const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toLocaleDateString('en-CA', { timeZone: TIMEZONE });
-        await dispatchNowFunction(tomorrow);
-      } else {
-        await sock.sendMessage(chatId, { text: '⚠️ Dispatch function is not ready yet.' });
+      {
+        const msgKey = await sock.sendMessage(chatId, { text: '⚡ *Manual Dispatch Started!* Sending tonight\'s posts to the Main Group...' });
+        if (dispatchNowFunction) {
+          const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toLocaleDateString('en-CA', { timeZone: TIMEZONE });
+          const count = await dispatchNowFunction(tomorrow);
+          await sock.sendMessage(chatId, { text: `╭━━━ ⚡ DISPATCH COMPLETE ━━━╮\n\n🎉 Successfully dispatched ${count || 0} birthdays to the Main Group.\n\n━━━━━━━━━━━━━━━━━━\n✅ Status: Manual Dispatch Finished`, edit: msgKey.key });
+        } else {
+          await sock.sendMessage(chatId, { text: '⚠️ Dispatch function is not ready yet.', edit: msgKey.key });
+        }
       }
       break;
 

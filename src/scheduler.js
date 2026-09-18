@@ -110,6 +110,7 @@ async function dispatchTodaysPosts(sock, mainGroupId, forceDate = null) {
       db.markFailed(post.id);
     }
   }
+  return posts.length;
 }
 
 /**

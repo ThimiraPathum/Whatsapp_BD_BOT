@@ -38,7 +38,7 @@ const REP_GROUP_ID = process.env.REP_GROUP_ID.trim();
 const MAIN_GROUP_ID = process.env.MAIN_GROUP_ID.trim();
 const TIMEZONE = process.env.TIMEZONE || 'Asia/Colombo';
 
-const pollCache = new Map(); // Cache for poll creation messages
+const reactionCache = new Map(); // Cache for reaction messages
 
 
 // ─── Caption Builder Helper ───────────────────────────────────────────────────
@@ -112,6 +112,33 @@ async function startBot() {
     if (type !== 'notify') return;
 
     for (const msg of messages) {
+      // Handle emoji reactions for urgent dispatches
+      if (msg.message?.reactionMessage) {
+        const reaction = msg.message.reactionMessage;
+        const reactedMsgId = reaction.key.id;
+        const emoji = reaction.text;
+
+        const reactionData = reactionCache.get(reactedMsgId);
+        if (reactionData) {
+          if (emoji === '👍') {
+            console.log(`[Bot] Reaction approved for ID: ${reactionData.postId}`);
+            reactionCache.delete(reactedMsgId);
+            await dispatchApprovedPost(sock, reactionData.postId, msg.key.remoteJid);
+          } else if (emoji === '❌') {
+            console.log(`[Bot] Reaction canceled for ID: ${reactionData.postId}`);
+            reactionCache.delete(reactedMsgId);
+            
+            const post = db.getPostById(reactionData.postId);
+            db.cancelPost(reactionData.postId);
+            if (post && post.image_path && fs.existsSync(post.image_path)) {
+              try { fs.unlinkSync(post.image_path); } catch (e) {}
+            }
+            await sock.sendMessage(msg.key.remoteJid, { text: `🗑️ ID: ${reactionData.postId} සහිත පෝස්ට් එක මකා දමන ලදී.` });
+          }
+        }
+        continue; // Skip further processing for reactions
+      }
+
       try {
         await handleIncomingMessage(msg);
       } catch (err) {
@@ -120,50 +147,9 @@ async function startBot() {
     }
   });
 
+  // Remove the old messages.update listener entirely
   sock.ev.on('messages.update', async (events) => {
-    if (events[0]?.update?.status) {
-      return;
-    }
-
-    for (const { key, update } of events) {
-      if (update.pollUpdates) {
-        console.log(`[Bot] Received poll update for message ID: ${key.id}`);
-        const pollData = pollCache.get(key.id);
-        
-        if (pollData) {
-          try {
-            const pollVote = getAggregateVotesInPollMessage({
-              message: pollData.pollMsg.message,
-              pollUpdates: update.pollUpdates,
-            });
-            console.log(`[Bot] Decrypted poll votes:`, JSON.stringify(pollVote));
-            
-            const approveOption = pollVote.find(v => v.name === '✅ Approve & Send');
-            const cancelOption = pollVote.find(v => v.name === '❌ Cancel');
-
-            if (approveOption && approveOption.voters.length > 0) {
-              console.log(`[Bot] Poll approved for ID: ${pollData.postId}`);
-              pollCache.delete(key.id);
-              await dispatchApprovedPost(sock, pollData.postId, key.remoteJid);
-            } else if (cancelOption && cancelOption.voters.length > 0) {
-              console.log(`[Bot] Poll canceled for ID: ${pollData.postId}`);
-              pollCache.delete(key.id);
-              
-              const post = db.getPostById(pollData.postId);
-              db.cancelPost(pollData.postId);
-              if (post && post.image_path && fs.existsSync(post.image_path)) {
-                try { fs.unlinkSync(post.image_path); } catch (e) {}
-              }
-              await sock.sendMessage(key.remoteJid, { text: `🗑️ ID: ${pollData.postId} සහිත පෝස්ට් එක මකා දමන ලදී.` });
-            }
-          } catch (pollErr) {
-            console.error(`[Bot] Error decrypting poll:`, pollErr);
-          }
-        } else {
-          console.log(`[Bot] Poll data not found in cache for ID: ${key.id}`);
-        }
-      }
-    }
+    // Left intentionally blank as we no longer use polls
   });
 }
 
@@ -326,18 +312,14 @@ async function handleIncomingMessage(msg) {
 
   if (birthday === today) {
     try {
-      const pollMsg = await sock.sendMessage(chatId, {
-        poll: {
-          name: `⚠️ *අද දවසේ උපන්දිනයක්!*\n\n👤 Name: ${name}\n🆔 ID: ${id}\n\nමේක දැන්ම Main Group එකට යවන්න ඕනෙද?`,
-          values: ['✅ Approve & Send', '❌ Cancel'],
-          selectableCount: 1
-        }
+      const reactionMsg = await sock.sendMessage(chatId, {
+        text: `⚠️ *අද දවසේ උපන්දිනයක්!*\n\n👤 Name: ${name}\n🆔 ID: ${id}\n\nමේක දැන්ම Main Group එකට යවන්න ඕනෙද?\n\n👍 - අනුමත කර දැන්ම යවන්න\n❌ - මකා දමන්න`
       });
-      pollCache.set(pollMsg.key.id, { pollMsg, postId: id });
+      reactionCache.set(reactionMsg.key.id, { postId: id });
       
-      await editLoading(`✅ *Saved!* (ID: ${id})\n\nමේක අද දවසේ උපන්දිනයක් නිසා Main Group එකට යවන්න අර පල්ලෙහා තියෙන Poll එකෙන් Approve කරන්න. ☝️`);
+      await editLoading(`✅ *Saved!* (ID: ${id})\n\nමේක අද දවසේ උපන්දිනයක් නිසා Main Group එකට යවන්න අර පල්ලෙහා තියෙන මැසේජ් එකට 👍 රිඇක්ට් කරන්න. ☝️`);
     } catch (err) {
-      console.error('[Bot] Failed to send poll:', err);
+      console.error('[Bot] Failed to send reaction message:', err);
       await editLoading(`⚠️ Saved to DB (ID: ${id}) but could not send the Poll.`);
     }
   } else {

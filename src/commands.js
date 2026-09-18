@@ -36,13 +36,15 @@ async function handleCommand(sock, chatId, text, dispatchNowFunction) {
       break;
 
     case '/today':
-      await showTodaysBirthdays(sock, chatId);
+    case '/tonight':
+      await showTonightBirthdays(sock, chatId);
       break;
 
     case '/dispatch':
-      await sock.sendMessage(chatId, { text: '⚡ *Manual Dispatch Started!* Sending today\'s posts to the Main Group...' });
+      await sock.sendMessage(chatId, { text: '⚡ *Manual Dispatch Started!* Sending tonight\'s posts to the Main Group...' });
       if (dispatchNowFunction) {
-        await dispatchNowFunction();
+        const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toLocaleDateString('en-CA', { timeZone: TIMEZONE });
+        await dispatchNowFunction(tomorrow);
       } else {
         await sock.sendMessage(chatId, { text: '⚠️ Dispatch function is not ready yet.' });
       }
@@ -81,8 +83,8 @@ Example:
 🔹 /list or /pending
 View all upcoming birthdays.
 
-🔹 /today
-View today's birthdays.
+🔹 /today or /tonight
+View birthdays scheduled for tonight's dispatch.
 
 ━━━━━━━━━━━━━━━━━━
 
@@ -95,7 +97,7 @@ Example:
 /cancel 5
 
 🔹 /dispatch
-Dispatch today's birthdays to the Main Group immediately.
+Manually dispatch tonight's birthdays to the Main Group immediately.
 
 ━━━━━━━━━━━━━━━━━━
 
@@ -132,21 +134,21 @@ async function listPendingPosts(sock, chatId) {
   await sock.sendMessage(chatId, { text: msg.trim() });
 }
 
-async function showTodaysBirthdays(sock, chatId) {
-  const today = new Date().toLocaleDateString('en-CA', { timeZone: TIMEZONE });
-  const todaysPosts = db.getPendingForToday(today);
+async function showTonightBirthdays(sock, chatId) {
+  const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toLocaleDateString('en-CA', { timeZone: TIMEZONE });
+  const todaysPosts = db.getPendingForToday(tomorrow);
 
   if (todaysPosts.length === 0) {
-    await sock.sendMessage(chatId, { text: `╭━━━ 🎂 TODAY'S BIRTHDAYS ━━━╮\n\n📅 ${today}\n\n━━━━━━━━━━━━━━━━━━\n\n✅ No birthdays scheduled for today.` });
+    await sock.sendMessage(chatId, { text: `╭━━━ 🌙 TONIGHT'S DISPATCH ━━━╮\n\n📅 For Date: ${tomorrow}\n\n━━━━━━━━━━━━━━━━━━\n\n✅ No birthdays scheduled for tonight.` });
     return;
   }
 
-  let msg = `╭━━━ 🎂 TODAY'S BIRTHDAYS ━━━╮\n\n📅 ${today}\n\n━━━━━━━━━━━━━━━━━━\n\n`;
+  let msg = `╭━━━ 🌙 TONIGHT'S DISPATCH ━━━╮\n\n📅 For Date: ${tomorrow}\n\n━━━━━━━━━━━━━━━━━━\n\n`;
   todaysPosts.forEach(p => {
     msg += `🆔 #${p.id} — 👤 ${p.name}\n`;
   });
   
-  msg += `\n━━━━━━━━━━━━━━━━━━\n\n🕛 Automatic Dispatch: 12:00 AM\n\n⚡ Use /dispatch to send today's birthdays immediately.`;
+  msg += `\n━━━━━━━━━━━━━━━━━━\n\n🕛 Automatic Dispatch: 12:00 AM\n\n⚡ Use /dispatch to send these birthdays immediately.`;
 
   await sock.sendMessage(chatId, { text: msg.trim() });
 }

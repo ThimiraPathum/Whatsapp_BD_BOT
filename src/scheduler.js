@@ -65,11 +65,11 @@ async function sendBirthdayPost(sock, mainGroupId, post) {
  * @param {import('@whiskeysockets/baileys').WASocket} sock
  * @param {string} mainGroupId  WhatsApp chat ID for the main group
  */
-async function dispatchTodaysPosts(sock, mainGroupId) {
-  const today = new Date().toLocaleDateString('en-CA', { timeZone: TIMEZONE }); // YYYY-MM-DD
-  console.log(`[Scheduler] Checking for birthday posts on ${today}…`);
+async function dispatchTodaysPosts(sock, mainGroupId, forceDate = null) {
+  const targetDate = forceDate || new Date().toLocaleDateString('en-CA', { timeZone: TIMEZONE }); // YYYY-MM-DD
+  console.log(`[Scheduler] Checking for birthday posts on ${targetDate}…`);
 
-  const posts = db.getPendingForToday(today);
+  const posts = db.getPendingForToday(targetDate);
   if (posts.length === 0) {
     console.log('[Scheduler] No pending posts for today.');
     return;

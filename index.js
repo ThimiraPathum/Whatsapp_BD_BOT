@@ -122,37 +122,45 @@ async function startBot() {
 
   sock.ev.on('messages.update', async (events) => {
     if (events[0]?.update?.status) {
-      // ignore status updates to avoid noise
       return;
     }
 
     for (const { key, update } of events) {
       if (update.pollUpdates) {
+        console.log(`[Bot] Received poll update for message ID: ${key.id}`);
         const pollData = pollCache.get(key.id);
+        
         if (pollData) {
-          const pollVote = getAggregateVotesInPollMessage({
-            message: pollData.pollMsg.message,
-            pollUpdates: update.pollUpdates,
-          });
-          
-          const approveOption = pollVote.find(v => v.name === '✅ Approve & Send');
-          const cancelOption = pollVote.find(v => v.name === '❌ Cancel');
-
-          if (approveOption && approveOption.voters.length > 0) {
-            console.log(`[Bot] Poll approved for ID: ${pollData.postId}`);
-            pollCache.delete(key.id);
-            await dispatchApprovedPost(sock, pollData.postId, key.remoteJid);
-          } else if (cancelOption && cancelOption.voters.length > 0) {
-            console.log(`[Bot] Poll canceled for ID: ${pollData.postId}`);
-            pollCache.delete(key.id);
+          try {
+            const pollVote = getAggregateVotesInPollMessage({
+              message: pollData.pollMsg.message,
+              pollUpdates: update.pollUpdates,
+            });
+            console.log(`[Bot] Decrypted poll votes:`, JSON.stringify(pollVote));
             
-            const post = db.getPostById(pollData.postId);
-            db.cancelPost(pollData.postId);
-            if (post && post.image_path && fs.existsSync(post.image_path)) {
-              try { fs.unlinkSync(post.image_path); } catch (e) {}
+            const approveOption = pollVote.find(v => v.name === '✅ Approve & Send');
+            const cancelOption = pollVote.find(v => v.name === '❌ Cancel');
+
+            if (approveOption && approveOption.voters.length > 0) {
+              console.log(`[Bot] Poll approved for ID: ${pollData.postId}`);
+              pollCache.delete(key.id);
+              await dispatchApprovedPost(sock, pollData.postId, key.remoteJid);
+            } else if (cancelOption && cancelOption.voters.length > 0) {
+              console.log(`[Bot] Poll canceled for ID: ${pollData.postId}`);
+              pollCache.delete(key.id);
+              
+              const post = db.getPostById(pollData.postId);
+              db.cancelPost(pollData.postId);
+              if (post && post.image_path && fs.existsSync(post.image_path)) {
+                try { fs.unlinkSync(post.image_path); } catch (e) {}
+              }
+              await sock.sendMessage(key.remoteJid, { text: `🗑️ ID: ${pollData.postId} සහිත පෝස්ට් එක මකා දමන ලදී.` });
             }
-            await sock.sendMessage(key.remoteJid, { text: `🗑️ ID: ${pollData.postId} සහිත පෝස්ට් එක මකා දමන ලදී.` });
+          } catch (pollErr) {
+            console.error(`[Bot] Error decrypting poll:`, pollErr);
           }
+        } else {
+          console.log(`[Bot] Poll data not found in cache for ID: ${key.id}`);
         }
       }
     }

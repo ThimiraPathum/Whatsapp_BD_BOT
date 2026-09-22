@@ -246,6 +246,11 @@ async function dispatchApprovedPost(sock, postId, repChatId, editKey = null) {
 async function handleIncomingMessage(msg) {
   if (!msg.message || msg.key.fromMe) return;
 
+  // Mark message as read (Blue Ticks)
+  try {
+    await sock.readMessages([msg.key]);
+  } catch (err) {}
+
   const chatId = msg.key.remoteJid;
   const body =
     msg.message.conversation ||
@@ -347,7 +352,9 @@ async function handleIncomingMessage(msg) {
 
   // AI එකෙන් දත්ත ගැනීම (/add නැතිව නිකම්ම ෆොටෝ එකක් දැම්මොත්)
   if (!isManualAdd) {
+    try { await sock.sendPresenceUpdate('composing', chatId); } catch (e) {}
     const details = await extractBirthdayDetails(imagePath);
+    try { await sock.sendPresenceUpdate('paused', chatId); } catch (e) {}
     if (!details) {
       if (fs.existsSync(imagePath)) fs.unlinkSync(imagePath);
       const aiFailedMsg = `╭━━━ ⚠️ FLYER NOT READ ━━━╮\n\nThe AI could not extract the birthday details from this flyer.\n\n📸 Please re-upload the flyer.\n\nIf the problem continues, add the following as the caption:\n\n/add [Name] | [Date]\n\n💡 Example:\n/add Kasun | 2026-09-18\n\n━━━━━━━━━━━━━━━━━━\n🔄 Please try again.`;

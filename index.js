@@ -25,6 +25,52 @@ const { startScheduler, startDailyPreview } = require('./src/scheduler');
 const { handleCommand } = require('./src/commands');
 const { extractBirthdayDetails } = require('./src/vision');
 
+// ─── Uptime Monitor & Health Check Server ───────────────────────────────────
+const express = require('express');
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+app.get('/ping', (req, res) => {
+  res.send('pong');
+});
+
+app.listen(PORT, () => {
+  console.log(`[Monitor] Uptime server running on port ${PORT}`);
+});
+
+// ─── Global Error Handlers (WhatsApp Crash Alerts) ──────────────────────────
+let globalSock = null; // Used to send crash messages
+
+process.on('uncaughtException', async (err) => {
+  console.error('[Fatal Error] Uncaught Exception:', err);
+  if (globalSock && REP_GROUP_ID) {
+    try {
+      await globalSock.sendMessage(REP_GROUP_ID, { 
+        text: `╭━━━ 🚨 CRITICAL ERROR ━━━╮\n\nThe bot has encountered a fatal error and crashed!\n\n⚠️ *Error:*\n${err.message}\n\n━━━━━━━━━━━━━━━━━━\nBot is now restarting...` 
+      });
+    } catch (e) {
+      console.error('[Fatal Error] Could not send WhatsApp crash alert:', e.message);
+    }
+  }
+  process.exit(1);
+});
+
+process.on('unhandledRejection', async (reason, promise) => {
+  console.error('[Fatal Error] Unhandled Rejection at:', promise, 'reason:', reason);
+  if (globalSock && REP_GROUP_ID) {
+    try {
+      // Stringify reason to avoid object [Object object]
+      const reasonText = reason instanceof Error ? reason.message : String(reason);
+      await globalSock.sendMessage(REP_GROUP_ID, { 
+        text: `╭━━━ 🚨 CRITICAL ERROR ━━━╮\n\nThe bot has encountered an unhandled rejection and crashed!\n\n⚠️ *Reason:*\n${reasonText}\n\n━━━━━━━━━━━━━━━━━━\nBot is now restarting...` 
+      });
+    } catch (e) {
+      console.error('[Fatal Error] Could not send WhatsApp crash alert:', e.message);
+    }
+  }
+  process.exit(1);
+});
+
 // ─── Config validation ────────────────────────────────────────────────────────
 
 const REQUIRED_ENV = ['GROQ_API_KEY', 'REP_GROUP_ID', 'MAIN_GROUP_ID'];
@@ -76,6 +122,7 @@ async function startBot() {
     printQRInTerminal: false,
     logger: pino({ level: 'silent' }),
   });
+  globalSock = sock;
 
   sock.ev.on('creds.update', saveCreds);
 

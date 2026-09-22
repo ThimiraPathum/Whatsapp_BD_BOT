@@ -75,6 +75,11 @@ async function dispatchTodaysPosts(sock, mainGroupId, forceDate = null) {
     return;
   }
 
+  if (db.isBotPaused()) {
+    console.log('[Scheduler] ⚠️ Bot is PAUSED. Skipping automatic dispatch.');
+    return;
+  }
+
   console.log(`[Scheduler] Found ${posts.length} post(s) to dispatch.`);
 
   for (const post of posts) {

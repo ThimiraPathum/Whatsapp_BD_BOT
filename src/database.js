@@ -37,6 +37,10 @@ function initSchema() {
       created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
       posted_at   TEXT
     );
+    CREATE TABLE IF NOT EXISTS config (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
 
     CREATE INDEX IF NOT EXISTS idx_birthday_status
       ON birthday_posts (birthday, status);
@@ -175,6 +179,18 @@ function backupDatabase() {
   }
 }
 
+function isBotPaused() {
+  const row = getDb().prepare('SELECT value FROM config WHERE key = ?').get('is_paused');
+  return row && row.value === 'true';
+}
+
+function setBotPaused(isPaused) {
+  getDb().prepare(`
+    INSERT INTO config (key, value) VALUES ('is_paused', ?)
+    ON CONFLICT(key) DO UPDATE SET value = ?
+  `).run(isPaused ? 'true' : 'false', isPaused ? 'true' : 'false');
+}
+
 module.exports = {
   insertPost,
   getPendingForToday,
@@ -185,4 +201,6 @@ module.exports = {
   cancelPost,
   getPostById,
   backupDatabase,
+  isBotPaused,
+  setBotPaused,
 };

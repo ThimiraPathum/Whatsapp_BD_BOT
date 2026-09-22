@@ -232,6 +232,12 @@ async function handleIncomingMessage(msg) {
   // 3. ෆොටෝ එකක් නැත්නම් මෙතනින් නතර වෙනවා
   if (!hasImage) return;
 
+  // 4. Bot Pause කරලා තියෙනවද කියලා බලනවා
+  if (db.isBotPaused()) {
+    await sock.sendMessage(chatId, { text: '⚠️ *Bot is currently PAUSED.*\n\nFlyers are not being accepted right now. Type `/resume` to turn the bot back on.' }, { quoted: msg });
+    return;
+  }
+
   // ==========================================
   // මෙතැන් සිට පහළට යන්නේ ෆොටෝ (Flyers) පමණි!
   // ==========================================

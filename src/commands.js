@@ -53,6 +53,16 @@ async function handleCommand(sock, chatId, text, dispatchNowFunction) {
       }
       break;
 
+    case '/pause':
+      db.setBotPaused(true);
+      await sock.sendMessage(chatId, { text: '╭━━━ ⏸️ BOT PAUSED ━━━╮\n\nThe bot is now paused.\n\n⚠️ It will NOT accept new flyers.\n⚠️ It will NOT dispatch scheduled posts.\n\nType `/resume` to start it again.\n━━━━━━━━━━━━━━━━━━' });
+      break;
+
+    case '/resume':
+      db.setBotPaused(false);
+      await sock.sendMessage(chatId, { text: '╭━━━ ▶️ BOT RESUMED ━━━╮\n\nThe bot is now active.\n\n✅ Ready to accept new flyers.\n✅ Scheduled posts will be dispatched.\n━━━━━━━━━━━━━━━━━━' });
+      break;
+
     default:
       if (cmd !== '/add' && cmd !== '/id') {
           await sock.sendMessage(chatId, { text: '❓ *Invalid Command!*\nType `/help` for the command list.' });

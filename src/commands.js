@@ -224,18 +224,24 @@ async function showDesignStatus(sock, chatId, argMonth) {
   const designed = submissions.filter(s => s.status === 'designed');
   const pending = submissions.filter(s => s.status === 'pending_design');
 
-  let msg = `╭━━━ 📊 MONTHLY REPORT (Month: ${targetMonth}) ━━━╮\n\n`;
+  let msg = `┏━━━━━━━━━━━━━━━━━━━━┓\n   📅 MONTH: ${targetMonth} SUMMARY\n┗━━━━━━━━━━━━━━━━━━━━┛\n\n`;
   
-  msg += `✅ *Already Designed & Scheduled (${designed.length})*\n`;
+  msg += `*✅ Scheduled & Ready (${designed.length}):*\n`;
   if (designed.length > 0) {
-    designed.forEach(s => { msg += `• ${s.name} (${s.birthday})\n`; });
+    designed.forEach(s => { 
+      const shortDate = s.birthday.split('-').slice(1).join('-'); // 09-03
+      msg += `🎉 ${s.name} (${shortDate})\n`; 
+    });
   } else {
     msg += `(None)\n`;
   }
 
-  msg += `\n❌ *Not Designed Yet / Pending (${pending.length})*\n`;
+  msg += `\n🔴 *PENDING DESIGNS (${pending.length})*\n`;
   if (pending.length > 0) {
-    pending.forEach(s => { msg += `• ${s.name} (${s.birthday})\n  🔗 ${s.photo_url}\n`; });
+    pending.forEach((s, i) => { 
+      const shortDate = s.birthday.split('-').slice(1).join('-'); // 09-20
+      msg += `${i + 1}. ${s.name} [${shortDate}]\n   📂 Download: ${s.photo_url}\n`; 
+    });
   } else {
     msg += `(None! All caught up 🎉)\n`;
   }

@@ -56,6 +56,23 @@ function initSchema() {
 
   // Auto-sync existing posts: If a form submission matches an already existing post, mark it as designed.
   getDb().exec(`
+    -- 1. Fix dirty dates (e.g., 2003-09-03T18:00:00.000Z -> 2003-09-03)
+    UPDATE form_submissions
+    SET birthday = substr(birthday, 1, 10)
+    WHERE birthday LIKE '%T%';
+
+    -- 2. Force the year to be the upcoming year (e.g. 2003 -> 2026 or 2027)
+    UPDATE form_submissions
+    SET birthday = 
+      CASE 
+        WHEN strftime('%m-%d', birthday) < strftime('%m-%d', 'now') 
+        THEN cast(strftime('%Y', 'now') + 1 as text) || '-' || strftime('%m-%d', birthday)
+        ELSE strftime('%Y', 'now') || '-' || strftime('%m-%d', birthday)
+      END
+    WHERE substr(birthday, 1, 4) != strftime('%Y', 'now') 
+      AND substr(birthday, 1, 4) != cast(strftime('%Y', 'now') + 1 as text);
+
+    -- 3. Mark as designed if it matches existing post
     UPDATE form_submissions 
     SET status = 'designed' 
     WHERE status = 'pending_design' 

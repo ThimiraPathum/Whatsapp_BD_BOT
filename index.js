@@ -38,9 +38,27 @@ app.get('/ping', (req, res) => {
 
 app.post('/api/submit-form', async (req, res) => {
   try {
-    const { name, birthday, photoUrl } = req.body;
+    let { name, birthday, photoUrl } = req.body;
     if (!name || !birthday || !photoUrl) {
       return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    // Clean dirty dates (e.g., 2003-09-03T18:00:00.000Z -> 2003-09-03)
+    if (birthday.includes('T')) {
+      birthday = birthday.split('T')[0];
+    }
+    
+    // Ensure the year is the upcoming year
+    const now = new Date();
+    const parts = birthday.split('-');
+    if (parts.length === 3) {
+      const month = parseInt(parts[1], 10) - 1;
+      const day = parseInt(parts[2], 10);
+      let upcomingYear = now.getFullYear();
+      if (new Date(upcomingYear, month, day) < now) {
+        upcomingYear += 1;
+      }
+      birthday = `${upcomingYear}-${parts[1]}-${parts[2]}`;
     }
 
     db.insertFormSubmission({ name, birthday, photoUrl });

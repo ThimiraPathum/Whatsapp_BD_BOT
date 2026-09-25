@@ -30,8 +30,35 @@ const express = require('express');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+app.use(express.json({ limit: '50mb' }));
+
 app.get('/ping', (req, res) => {
   res.send('pong');
+});
+
+app.post('/api/submit-form', async (req, res) => {
+  try {
+    const { name, birthday, photoUrl } = req.body;
+    if (!name || !birthday || !photoUrl) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    db.insertFormSubmission({ name, birthday, photoUrl });
+    
+    // Check if it's the current month to send an alert
+    const currentMonth = new Date().toISOString().split('-')[1]; // '09'
+    const submissionMonth = birthday.split('-')[1];
+
+    if (submissionMonth === currentMonth && globalSock && process.env.REP_GROUP_ID) {
+      const alertMsg = `╭━━━ 🚨 URGENT: NEW SUBMISSION ━━━╮\n\nA new birthday form was submitted for THIS MONTH!\n\n👤 Name: ${name}\n📅 Date: ${birthday}\n\n🖼️ Photo Link:\n${photoUrl}\n\n━━━━━━━━━━━━━━━━━━\nPlease design and upload the flyer ASAP.`;
+      await globalSock.sendMessage(process.env.REP_GROUP_ID, { text: alertMsg });
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[Web] Form submission error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 app.listen(PORT, () => {

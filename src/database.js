@@ -41,10 +41,45 @@ function initSchema() {
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS form_submissions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      birthday TEXT NOT NULL,
+      photo_url TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending_design',
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
 
     CREATE INDEX IF NOT EXISTS idx_birthday_status
       ON birthday_posts (birthday, status);
   `);
+}
+
+// ─── Form Submissions ────────────────────────────────────────────────────────
+
+function insertFormSubmission({ name, birthday, photoUrl }) {
+  const existing = getDb().prepare('SELECT id FROM form_submissions WHERE name = ? AND birthday = ?').get(name, birthday);
+  if (existing) return existing.id; // Avoid duplicates
+
+  const stmt = getDb().prepare(
+    'INSERT INTO form_submissions (name, birthday, photo_url) VALUES (?, ?, ?)'
+  );
+  const info = stmt.run(name, birthday, photoUrl);
+  return info.lastInsertRowid;
+}
+
+function getFormSubmissionsByMonth(monthString) {
+  // monthString format: '-MM-' e.g., '-10-'
+  return getDb().prepare(
+    "SELECT * FROM form_submissions WHERE birthday LIKE ? ORDER BY birthday ASC"
+  ).all(`%${monthString}%`);
+}
+
+function markDesignCompleted(name, birthday) {
+  const stmt = getDb().prepare(
+    "UPDATE form_submissions SET status = 'designed' WHERE name = ? AND birthday = ? AND status = 'pending_design'"
+  );
+  stmt.run(name, birthday);
 }
 
 // ─── CRUD ────────────────────────────────────────────────────────────────────
@@ -59,6 +94,10 @@ function insertPost({ name, birthday, imagePath, msgId, chatId }) {
     VALUES (@name, @birthday, @imagePath, @msgId, @chatId)
   `);
   const result = stmt.run({ name, birthday, imagePath, msgId, chatId });
+  
+  // Also auto-mark the form submission as designed if it exists
+  markDesignCompleted(name, birthday);
+  
   return result.lastInsertRowid;
 }
 
@@ -203,4 +242,7 @@ module.exports = {
   backupDatabase,
   isBotPaused,
   setBotPaused,
+  insertFormSubmission,
+  getFormSubmissionsByMonth,
+  markDesignCompleted,
 };

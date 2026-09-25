@@ -40,6 +40,11 @@ async function handleCommand(sock, chatId, text, dispatchNowFunction) {
       await showTonightBirthdays(sock, chatId);
       break;
 
+    case '/status':
+    case '/designs':
+      await showDesignStatus(sock, chatId, parts[1]);
+      break;
+
     case '/dispatch':
       {
         const msgKey = await sock.sendMessage(chatId, { text: '⚡ *Manual Dispatch Started!* Sending tonight\'s posts to the Main Group...' });
@@ -193,6 +198,50 @@ async function cancelPost(sock, chatId, idStr) {
   } else {
     await sock.sendMessage(chatId, { text: `⚠️ Could not find a pending post with ID: ${id}.` });
   }
+}
+
+async function showDesignStatus(sock, chatId, argMonth) {
+  let targetMonth = argMonth;
+  const now = new Date();
+  
+  if (!targetMonth || targetMonth === 'this') {
+    targetMonth = String(now.getMonth() + 1).padStart(2, '0');
+  } else if (targetMonth === 'next') {
+    targetMonth = String((now.getMonth() + 2) % 12 || 12).padStart(2, '0');
+  } else {
+    targetMonth = String(parseInt(targetMonth, 10)).padStart(2, '0');
+  }
+
+  if (targetMonth === 'NaN' || targetMonth.length !== 2) {
+    return await sock.sendMessage(chatId, { text: '⚠️ *Invalid Month!*\nUse: `/status`, `/status next`, or `/status 10`' });
+  }
+
+  const submissions = db.getFormSubmissionsByMonth(`-${targetMonth}-`);
+  if (submissions.length === 0) {
+    return await sock.sendMessage(chatId, { text: `╭━━━ 📊 MONTHLY REPORT (Month: ${targetMonth}) ━━━╮\n\nNo form submissions found for this month.\n\n━━━━━━━━━━━━━━━━━━` });
+  }
+
+  const designed = submissions.filter(s => s.status === 'designed');
+  const pending = submissions.filter(s => s.status === 'pending_design');
+
+  let msg = `╭━━━ 📊 MONTHLY REPORT (Month: ${targetMonth}) ━━━╮\n\n`;
+  
+  msg += `✅ *Already Designed & Scheduled (${designed.length})*\n`;
+  if (designed.length > 0) {
+    designed.forEach(s => { msg += `• ${s.name} (${s.birthday})\n`; });
+  } else {
+    msg += `(None)\n`;
+  }
+
+  msg += `\n❌ *Not Designed Yet / Pending (${pending.length})*\n`;
+  if (pending.length > 0) {
+    pending.forEach(s => { msg += `• ${s.name} (${s.birthday})\n  🔗 ${s.photo_url}\n`; });
+  } else {
+    msg += `(None! All caught up 🎉)\n`;
+  }
+  
+  msg += `\n━━━━━━━━━━━━━━━━━━`;
+  await sock.sendMessage(chatId, { text: msg });
 }
 
 module.exports = { handleCommand };

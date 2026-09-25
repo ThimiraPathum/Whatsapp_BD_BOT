@@ -53,6 +53,18 @@ function initSchema() {
     CREATE INDEX IF NOT EXISTS idx_birthday_status
       ON birthday_posts (birthday, status);
   `);
+
+  // Auto-sync existing posts: If a form submission matches an already existing post, mark it as designed.
+  getDb().exec(`
+    UPDATE form_submissions 
+    SET status = 'designed' 
+    WHERE status = 'pending_design' 
+    AND EXISTS (
+      SELECT 1 FROM birthday_posts 
+      WHERE birthday_posts.name = form_submissions.name 
+      AND birthday_posts.birthday = form_submissions.birthday
+    );
+  `);
 }
 
 // ─── Form Submissions ────────────────────────────────────────────────────────

@@ -104,6 +104,10 @@ function getFormSubmissionsByMonth(monthString) {
   ).all(`%${monthString}%`);
 }
 
+function clearFormSubmissions() {
+  getDb().prepare('DELETE FROM form_submissions').run();
+}
+
 function markDesignCompleted(name, birthday) {
   const stmt = getDb().prepare(
     "UPDATE form_submissions SET status = 'designed' WHERE name = ? AND birthday = ? AND status = 'pending_design'"
@@ -274,4 +278,5 @@ module.exports = {
   insertFormSubmission,
   getFormSubmissionsByMonth,
   markDesignCompleted,
+  clearFormSubmissions,
 };

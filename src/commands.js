@@ -63,6 +63,11 @@ async function handleCommand(sock, chatId, text, dispatchNowFunction) {
       await sock.sendMessage(chatId, { text: '╭━━━ ⏸️ BOT PAUSED ━━━╮\n\nThe bot is now paused.\n\n⚠️ It will NOT accept new flyers.\n⚠️ It will NOT dispatch scheduled posts.\n\nType `/resume` to start it again.\n━━━━━━━━━━━━━━━━━━' });
       break;
 
+    case '/clear-form':
+      db.clearFormSubmissions();
+      await sock.sendMessage(chatId, { text: '✅ *Success!* All pending and designed form submissions have been wiped from the database. You can now re-sync from Google Sheets.' });
+      break;
+
     case '/resume':
       db.setBotPaused(false);
       await sock.sendMessage(chatId, { text: '╭━━━ ▶️ BOT RESUMED ━━━╮\n\nThe bot is now active.\n\n✅ Ready to accept new flyers.\n✅ Scheduled posts will be dispatched.\n━━━━━━━━━━━━━━━━━━' });

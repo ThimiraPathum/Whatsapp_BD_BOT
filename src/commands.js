@@ -87,52 +87,52 @@ async function showHelpMenu(sock, chatId) {
 
 ━━━━━━━━━━━━━━━━━━
 
+📊 FORM & STATUS
+
+🔹 /status
+View this month's design progress.
+
+🔹 /status next (or /status 10)
+View next month's (or specific month's) design progress.
+
+🔹 /clear-form
+Wipe pending form submissions from bot's memory to resync.
+
+━━━━━━━━━━━━━━━━━━
+
 🎂 BIRTHDAY MANAGEMENT
 
 🔹 /add [Name] | [Date]
-Add a birthday using a flyer.
-
-📸 Photo required
-
-Use this caption if the AI cannot read the flyer.
-
-Example:
-/add Kasun | 2026-09-18
+Manual fallback if AI fails to read the flyer.
 
 ━━━━━━━━━━━━━━━━━━
 
 📋 VIEW BIRTHDAYS
 
 🔹 /list or /pending
-View all upcoming birthdays.
+View all upcoming scheduled birthdays.
 
 🔹 /today or /tonight
 View birthdays scheduled for tonight's dispatch.
 
 ━━━━━━━━━━━━━━━━━━
 
-🛠️ POST ACTIONS
+🛠️ ACTIONS
 
 🔹 /cancel [ID]
 Delete a scheduled birthday.
 
-Example:
-/cancel 5
-
 🔹 /dispatch
-Manually dispatch tonight's birthdays to the Main Group immediately.
+Manually dispatch tonight's birthdays immediately.
 
-━━━━━━━━━━━━━━━━━━
-
-ℹ️ BOT INFORMATION
+🔹 /pause & /resume
+Turn the bot off or on.
 
 🔹 /id
-Get the current Group ID.
+Get the WhatsApp Group ID.
 
 ━━━━━━━━━━━━━━━━━━
-
-🤖 Birthday Bot
-Your automated birthday scheduling assistant.`;
+🤖 Automated Birthday Bot`;
   await sock.sendMessage(chatId, { text: menu.trim() });
 }
 

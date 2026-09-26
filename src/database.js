@@ -100,7 +100,7 @@ function insertFormSubmission({ name, birthday, photoUrl }) {
 function getFormSubmissionsByMonth(monthString) {
   // monthString format: '-MM-' e.g., '-10-'
   return getDb().prepare(
-    "SELECT * FROM form_submissions WHERE birthday LIKE ? ORDER BY birthday ASC"
+    "SELECT * FROM form_submissions WHERE birthday LIKE ? ORDER BY strftime('%m-%d', birthday) ASC"
   ).all(`%${monthString}%`);
 }
 

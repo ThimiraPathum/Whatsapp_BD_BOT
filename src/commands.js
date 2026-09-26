@@ -245,7 +245,7 @@ async function showDesignStatus(sock, chatId, argMonth) {
   if (pending.length > 0) {
     pending.forEach((s, i) => { 
       const shortDate = s.birthday.split('-').slice(1).join('-'); // 09-20
-      msg += `${i + 1}. ${s.name} [${shortDate}]\n   📂 Download: ${s.photo_url}\n`; 
+      msg += `${i + 1}. ${s.name} [${shortDate}]\n`; 
     });
   } else {
     msg += `(None! All caught up 🎉)\n`;

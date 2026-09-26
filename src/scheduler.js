@@ -168,6 +168,20 @@ function startDailyPreview(sock, repGroupId) {
       }
 
       await sock.sendMessage(repGroupId, { text: msg });
+
+      // Check if there are any Google Form submissions for tomorrow that are NOT designed yet
+      const tomorrowMonthDay = tomorrowStr.substring(5); // e.g. '09-27'
+      const pendingSubmissions = db.getDb().prepare("SELECT * FROM form_submissions WHERE birthday LIKE ? AND status = 'pending_design'").all(`%-${tomorrowMonthDay}`);
+      
+      if (pendingSubmissions.length > 0) {
+        let warningMsg = `╭━━━ 🚨 EMERGENCY WARNING ━━━╮\n\n⚠️ UNFINISHED DESIGNS DETECTED!\n\nThe following birthdays are TOMORROW, but their flyers have NOT been designed yet:\n\n`;
+        pendingSubmissions.forEach(s => {
+          warningMsg += `• ${s.name}\n`;
+        });
+        warningMsg += `\n🕛 They will NOT be dispatched at midnight unless you design and upload them now!\n━━━━━━━━━━━━━━━━━━`;
+        
+        await sock.sendMessage(repGroupId, { text: warningMsg });
+      }
       console.log(`[Scheduler] 🔔 Daily preview sent to Reps for ${tomorrowStr}.`);
     } catch (err) {
       console.error('[Scheduler] ⚠️ Error sending daily preview:', err.message);

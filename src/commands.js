@@ -95,15 +95,17 @@ View this month's design progress.
 🔹 /status next (or /status 10)
 View next month's (or specific month's) design progress.
 
-🔹 /clear-form
-Wipe pending form submissions from bot's memory to resync.
-
 ━━━━━━━━━━━━━━━━━━
 
 🎂 BIRTHDAY MANAGEMENT
 
 🔹 /add [Name] | [Date]
 Manual fallback if AI fails to read the flyer.
+
+📸 Photo required
+
+Example:
+/add Kasun | 2026-09-18
 
 ━━━━━━━━━━━━━━━━━━
 
@@ -122,14 +124,14 @@ View birthdays scheduled for tonight's dispatch.
 🔹 /cancel [ID]
 Delete a scheduled birthday.
 
+Example:
+/cancel 5
+
 🔹 /dispatch
 Manually dispatch tonight's birthdays immediately.
 
 🔹 /pause & /resume
-Turn the bot off or on.
-
-🔹 /id
-Get the WhatsApp Group ID.
+Turn the bot off or on in an emergency.
 
 ━━━━━━━━━━━━━━━━━━
 🤖 Automated Birthday Bot`;

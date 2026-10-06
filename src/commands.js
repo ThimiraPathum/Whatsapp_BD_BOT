@@ -261,7 +261,7 @@ async function showDesignStatus(sock, chatId, argMonth) {
 
   let msg = `┏━━━━━━━━━━━━━━━━━━━━┓\n   📅 MONTH: ${targetMonth} SUMMARY\n┗━━━━━━━━━━━━━━━━━━━━┛\n\n`;
   
-  msg += `✅ Scheduled & Ready (${designed.length}):\n`;
+  msg += `✅ Scheduled & Ready (Google Sheet) (${designed.length}):\n`;
   if (designed.length > 0) {
     designed.forEach(s => { 
       const shortDate = s.birthday.split('-').slice(1).join('-'); // 09-03
@@ -271,7 +271,7 @@ async function showDesignStatus(sock, chatId, argMonth) {
     msg += `(None)\n`;
   }
 
-  msg += `\n🔴 PENDING DESIGNS (${pending.length})\n`;
+  msg += `\n🔴 PENDING DESIGNS (Google Sheet) (${pending.length})\n`;
   if (pending.length > 0) {
     pending.forEach((s, i) => { 
       const shortDate = s.birthday.split('-').slice(1).join('-'); // 09-20
@@ -282,7 +282,7 @@ async function showDesignStatus(sock, chatId, argMonth) {
   }
   
   if (manuals.length > 0) {
-    msg += `\n➕ MANUAL ADDITIONS (${manuals.length})\n`;
+    msg += `\n➕ MANUAL ADDITIONS (Not in Sheet) (${manuals.length})\n`;
     manuals.forEach(s => {
       const shortDate = s.birthday.split('-').slice(1).join('-'); // 09-20
       msg += `🎉 ${s.name} (${shortDate})\n`; 

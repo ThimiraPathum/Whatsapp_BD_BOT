@@ -113,6 +113,29 @@ function getFormSubmissionsByMonth(monthString) {
   ).all(`%${monthString}%`);
 }
 
+function getManualAdditionsByMonth(monthString) {
+  // Find scheduled posts that are NOT linked to any form submission
+  return getDb().prepare(`
+    SELECT * FROM birthday_posts 
+    WHERE birthday LIKE ? 
+    AND NOT EXISTS (
+      SELECT 1 FROM form_submissions 
+      WHERE form_submissions.birthday = birthday_posts.birthday 
+      AND (
+        form_submissions.name = birthday_posts.name OR
+        birthday_posts.name LIKE (
+          CASE 
+            WHEN instr(form_submissions.name, ' ') > 0 
+            THEN substr(form_submissions.name, 1, instr(form_submissions.name, ' ') - 1) 
+            ELSE form_submissions.name 
+          END
+        ) || '%'
+      )
+    )
+    ORDER BY strftime('%m-%d', birthday) ASC
+  `).all(`%${monthString}%`);
+}
+
 function clearFormSubmissions() {
   getDb().prepare('DELETE FROM form_submissions').run();
 }
@@ -288,6 +311,7 @@ module.exports = {
   setBotPaused,
   insertFormSubmission,
   getFormSubmissionsByMonth,
+  getManualAdditionsByMonth,
   markDesignCompleted,
   clearFormSubmissions,
 };

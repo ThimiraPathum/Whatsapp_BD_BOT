@@ -1,5 +1,7 @@
 'use strict';
 
+const { sendRepMessage } = require('./rep-messages');
+
 /**
  * scheduler.js — Baileys version
  * Registers a cron job that fires at 00:00:00 every day (Asia/Colombo timezone).
@@ -142,7 +144,7 @@ function startScheduler(sock, mainGroupId) {
   backupJob.start();
   console.log(`[Scheduler] Daily database backup job registered (00:05 AM)`);
 
-  return { dispatchTodaysPosts: () => dispatchTodaysPosts(sock, mainGroupId) };
+  return { dispatchTodaysPosts: (forceDate = null) => dispatchTodaysPosts(sock, mainGroupId, forceDate) };
 }
 
 // 🔴 New: Daily Preview (9:00 PM every day)
@@ -167,7 +169,7 @@ function startDailyPreview(sock, repGroupId) {
         msg += `━━━━━━━━━━━━━━━━━━\n\n⚠️ Please Review\n\nIf any birthday is missing or incorrect, please contact Piyumal before 12:00 AM.\n\nThis is an automatic dispatch. No action is required if everything is correct.`;
       }
 
-      await sock.sendMessage(repGroupId, { text: msg });
+      await sendRepMessage(sock, repGroupId, { text: msg });
 
       // Check if there are any Google Form submissions for tomorrow that are NOT designed yet
       const tomorrowMonthDay = tomorrowStr.substring(5); // e.g. '09-27'
@@ -183,7 +185,7 @@ function startDailyPreview(sock, repGroupId) {
         });
         warningMsg += `\n🕛 They will NOT be dispatched at midnight unless you design and upload them now!\n━━━━━━━━━━━━━━━━━━`;
         
-        await sock.sendMessage(repGroupId, { text: warningMsg });
+        await sendRepMessage(sock, repGroupId, { text: warningMsg });
       }
       console.log(`[Scheduler] 🔔 Daily preview sent to Reps for ${tomorrowStr}.`);
     } catch (err) {

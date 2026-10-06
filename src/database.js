@@ -72,7 +72,13 @@ function initSchema() {
     WHERE substr(birthday, 1, 4) != strftime('%Y', 'now') 
       AND substr(birthday, 1, 4) != cast(strftime('%Y', 'now') + 1 as text);
 
-    -- 3. Mark as designed if it matches existing post (using first word of the name to avoid typos)
+  `);
+  syncDesignStatuses();
+}
+
+// Use the same matching rule at startup and regardless of upload order.
+function syncDesignStatuses() {
+  getDb().exec(`
     UPDATE form_submissions 
     SET status = 'designed' 
     WHERE status = 'pending_design' 
@@ -97,12 +103,16 @@ function initSchema() {
 
 function insertFormSubmission({ name, birthday, photoUrl }) {
   const existing = getDb().prepare('SELECT id FROM form_submissions WHERE name = ? AND birthday = ?').get(name, birthday);
-  if (existing) return existing.id; // Avoid duplicates
+  if (existing) {
+    syncDesignStatuses();
+    return existing.id; // Avoid duplicates and repair stale pending status.
+  }
 
   const stmt = getDb().prepare(
     'INSERT INTO form_submissions (name, birthday, photo_url) VALUES (?, ?, ?)'
   );
   const info = stmt.run(name, birthday, photoUrl);
+  syncDesignStatuses();
   return info.lastInsertRowid;
 }
 
@@ -140,15 +150,6 @@ function clearFormSubmissions() {
   getDb().prepare('DELETE FROM form_submissions').run();
 }
 
-function markDesignCompleted(name, birthday) {
-  // Use the first word of the name to avoid mismatching due to minor spelling/spacing differences
-  const firstWord = name.trim().split(/\s+/)[0];
-  const stmt = getDb().prepare(
-    "UPDATE form_submissions SET status = 'designed' WHERE birthday = ? AND status = 'pending_design' AND name LIKE ?"
-  );
-  stmt.run(birthday, `${firstWord}%`);
-}
-
 // ─── CRUD ────────────────────────────────────────────────────────────────────
 
 /**
@@ -163,7 +164,7 @@ function insertPost({ name, birthday, imagePath, msgId, chatId }) {
   const result = stmt.run({ name, birthday, imagePath, msgId, chatId });
   
   // Also auto-mark the form submission as designed if it exists
-  markDesignCompleted(name, birthday);
+  syncDesignStatuses();
   
   return result.lastInsertRowid;
 }
@@ -298,6 +299,7 @@ function setBotPaused(isPaused) {
 }
 
 module.exports = {
+  getDb,
   insertPost,
   getPendingForToday,
   markCompleted,
@@ -312,6 +314,5 @@ module.exports = {
   insertFormSubmission,
   getFormSubmissionsByMonth,
   getManualAdditionsByMonth,
-  markDesignCompleted,
   clearFormSubmissions,
 };

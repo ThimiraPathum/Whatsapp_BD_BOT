@@ -69,12 +69,18 @@ async function extractBirthdayDetails(imagePath) {
 
     const data = JSON.parse(rawResponse.trim());
 
-    if (!data.name || !data.birthday) {
+    if (data?.status === 'IGNORE') {
+      return { status: 'IGNORE' };
+    }
+
+    if (data?.status !== 'OK' || typeof data.name !== 'string' ||
+        typeof data.birthday !== 'string' || !data.name.trim() || !data.birthday.trim()) {
       console.error('[Vision] Groq JSON missing fields:', data);
       return null;
     }
 
     return {
+      status: 'OK',
       name: data.name.trim(),
       birthday: data.birthday.trim()
     };

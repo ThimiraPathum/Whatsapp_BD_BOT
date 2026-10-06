@@ -1,268 +1,105 @@
-# 🎂 WhatsApp Birthday Bot
-### University of Colombo — Faculty of Technology, 22/23 Batch
+# WhatsApp Birthday Bot
 
-A fully automated WhatsApp bot that schedules and dispatches birthday greeting posts at exactly **12:00 AM** with zero human intervention at midnight.
+Birthday flyer scheduling for University of Colombo, Faculty of Technology, 22/23 batch.
 
----
+## Workflow
 
-## Architecture Overview
+1. Upload a completed birthday flyer to the Rep Group.
+2. Baileys saves the image in `downloads/`. Groq Vision extracts its name and date. Images classified as raw photographs are ignored.
+3. SQLite stores the pending post. The bot replies with its date and ID; duplicate pending name/date pairs are rejected.
+4. At 9 PM, the Rep Group receives tomorrow's preview and a warning for unfinished form designs.
+5. At midnight, the bot sends that date's pending posts to the Main Group, marks successful posts completed and deletes their images.
 
-```
-Rep Group (admins drop images)
-        │
-        ▼
-   whatsapp-web.js
-        │  detects image
-        ▼
-   Downloader → saves to downloads/
-        │
-        ▼
-   Claude Vision API (OCR)
-        │  extracts name + date
-        ▼
-   SQLite Database  ←──── quote-reply confirmation
-        │
-        ▼ (midnight cron — Asia/Colombo)
-   Scheduler
-        │  reads pending rows for today
-        ▼
-   Main Group  ← sends image + caption
-        │
-        ▼
-   DB updated → status: "completed"
-```
+Schedules use `TIMEZONE`, defaulting to `Asia/Colombo`. The bot must be running and connected at dispatch time. Failed posts are marked failed; there is no automatic failed-post retry job.
 
----
+For a flyer dated today, react to the bot's prompt with 👍 to send immediately or ❌ to cancel. Reaction prompts are held in memory and do not survive a restart.
 
-## Project Structure
+## Setup
 
-```
-whatsapp-birthday-bot/
-├── index.js                  # Bot entry point — client init + message handler
-├── ecosystem.config.js       # PM2 production config
-├── .env.example              # Environment variable template
-│
-├── src/
-│   ├── database.js           # SQLite schema + all CRUD functions
-│   ├── vision.js             # Claude claude-sonnet-4-6 vision OCR module
-│   ├── downloader.js         # WhatsApp media download helper
-│   ├── scheduler.js          # node-cron midnight dispatch job
-│   └── commands.js           # Admin text command handler (/list, /cancel, etc.)
-│
-├── tools/
-│   └── list-groups.js        # One-time utility: discover WhatsApp group IDs
-│
-├── data/
-│   └── birthdays.db          # SQLite database (auto-created on first run)
-│
-└── downloads/                # Downloaded birthday card images (auto-created)
+Install Node.js compatible with the dependencies in `package-lock.json`, then run `npm ci`. The current Baileys bot does not require Chrome or Puppeteer.
+
+Create `.env` in the project root:
+
+```env
+GROQ_API_KEY=your-groq-api-key
+REP_GROUP_ID=your-rep-group-id@g.us
+MAIN_GROUP_ID=your-main-group-id@g.us
+TIMEZONE=Asia/Colombo
+PORT=3000
+# Optional: override the default in src/vision.js with a vision-capable model.
+# GROQ_VISION_MODEL=your-vision-model
+# BIRTHDAY_CAPTION="Happy Birthday, {name}!"
 ```
 
----
+`{name}` in the caption uses the first suitable name component; `{date}` uses the scheduled date.
 
-## Prerequisites
+Run `npm start` and scan the terminal QR code using the bot's WhatsApp account. Credentials persist in `.baileys_auth/`.
 
-| Requirement | Version |
+To discover group IDs, initially configure nonempty placeholder group IDs and start the bot. From another WhatsApp account, send `/id` in each target group. Copy the returned IDs into `.env` and restart. The legacy `tools/list-groups.js` still uses WhatsApp Web.js, which is no longer a dependency; use `/id` instead.
+
+## Commands
+
+Rep Group messages keep their existing layout and instructions, with a short
+English footer with “Yo”, “bro”, “my guy” and “boss” from Elama Bota. Footers rotate at midnight in
+`Asia/Colombo`, repeat after seven days, and use no AI calls. Errors and recovery
+instructions stay plain. Main Group birthday messages are unchanged. Edit the
+footer collections in `src/rep-messages.js` to adjust the jokes.
+
+Commands are restricted to the Rep Group, except `/id`. There is no individual member admin-role check.
+
+| Command | Action |
 |---|---|
-| Node.js | ≥ 18.0.0 |
-| npm | ≥ 8 |
-| Chromium / Google Chrome | installed on the host |
-| Anthropic API key | any tier with Claude claude-sonnet-4-6 access |
+| `/help`, `/menu` | Show command guide |
+| `/add Name \| YYYY-MM-DD` | Supply details manually in an uploaded flyer's caption |
+| `/list`, `/pending` | List pending posts |
+| `/today`, `/tonight` | Show tomorrow's posts for the upcoming midnight |
+| `/dispatch` | Send those same tomorrow-dated posts immediately; respects pause state |
+| `/cancel ID`, `/delete ID` | Remove a pending post and its local image |
+| `/status`, `/designs` | This month's form/design report |
+| `/status next`, `/status 10` | Report for next month or a specified month |
+| `/pause`, `/resume` | Pause/resume flyer intake and scheduler dispatch |
+| `/clear-form` | Delete all form submissions, including designed entries |
+| `/id` | Reply with the current chat ID, including outside the Rep Group |
 
-> **Server note:** The bot uses Puppeteer to control a headless Chrome instance for WhatsApp Web. Your server needs Chrome installed:
-> ```bash
-> # Ubuntu/Debian
-> sudo apt-get install -y chromium-browser
-> # or
-> sudo apt-get install -y google-chrome-stable
-> ```
+If AI extraction fails, re-upload the flyer with a caption such as `/add Kasun Perera | 2026-10-18`. An attached image is required.
 
----
+## Form API and monitoring
 
-## Setup & Installation
+Express listens on `PORT` (default `3000`):
 
-### 1. Clone and install dependencies
+- `GET /ping` returns `pong`. This checks HTTP liveness, not WhatsApp connectivity.
+- `POST /api/submit-form` accepts JSON with `name`, `birthday`, and `photoUrl`. It stores a submission awaiting a flyer and alerts the Rep Group for submissions in the current month.
 
-```bash
-git clone <your-repo-url>
-cd whatsapp-birthday-bot
-PUPPETEER_SKIP_DOWNLOAD=true npm install
-```
+The endpoint currently has no authentication. Google Forms/Sheets forwarding must be configured separately; no forwarding script or form frontend is included. Form design status is reconciled automatically at database initialization and whenever a flyer or form submission is saved (including duplicate form submissions). Matching uses the birthday date and name prefix, whether the form or flyer arrives first. No manual repair command is needed.
 
-> `PUPPETEER_SKIP_DOWNLOAD=true` skips Puppeteer downloading its own Chrome, since we use the system Chrome.
+## Project files
 
-### 2. Configure environment
+| File | Purpose |
+|---|---|
+| `index.js` | Baileys connection, messages/reactions and Express API |
+| `src/vision.js` | Groq image analysis |
+| `src/database.js` | SQLite schema, post/form operations, pause state and backups |
+| `src/scheduler.js` | Midnight dispatch, 9 PM preview and 12:05 AM backups |
+| `src/commands.js` | Commands and design reports |
+| `ecosystem.config.js` | PM2 configuration |
+| `src/downloader.js` | Legacy WhatsApp Web.js helper, unused by the current entry point |
 
-```bash
-cp .env.example .env
-nano .env
-```
+SQLite data lives in `data/birthdays.db`, with tables `birthday_posts` (pending/completed/failed), `form_submissions` (pending_design/designed), and `config`. The daily backup job copies the database into `data/backups/` and removes backups older than seven days.
 
-Fill in your `ANTHROPIC_API_KEY`. Leave the group IDs blank for now.
+Keep `.env` and `.baileys_auth/` private. Preserve `data/`, pending images in `downloads/`, and the session directory across deployments.
 
-### 3. Discover your WhatsApp Group IDs
+## Production
 
-```bash
-node tools/list-groups.js
-```
+With PM2 installed:
 
-Scan the QR code with your WhatsApp account (the bot's number). After login, all your groups and their IDs are printed:
-
-```
-Found 5 group(s):
-
-[1] FoT 22/23 — Reps
-    ID: 120363123456789012@g.us
-
-[2] FoT 22/23 — Main Batch
-    ID: 120363987654321098@g.us
-...
-```
-
-Copy the two relevant IDs into `.env`:
-
-```env
-REP_GROUP_ID=120363123456789012@g.us
-MAIN_GROUP_ID=120363987654321098@g.us
-```
-
-### 4. (Optional) Customise the caption
-
-In `.env`, you can override the midnight post caption:
-
-```env
-BIRTHDAY_CAPTION=🎂 Happy Birthday, {name}! 🎉\n\nWith love from the FoT 22/23 Batch! #UColombo
-```
-
-`{name}` is replaced with the student's name at dispatch time.
-
----
-
-## Running the Bot
-
-### Development
-
-```bash
-node index.js
-```
-
-Scan the QR code once. The session is saved to `.wwebjs_auth/` so subsequent starts don't need a re-scan.
-
-### Production (with PM2)
-
-```bash
-npm install -g pm2
+```sh
 pm2 start ecosystem.config.js
-pm2 save           # persist across reboots
-pm2 startup        # generate systemd/init script
-```
-
-Monitor in real-time:
-```bash
-pm2 monit
+pm2 save
 pm2 logs birthday-bot
 ```
 
----
+Configure startup using your host's supported mechanism. PM2 runs one instance with automatic restarts and a 512 MB memory restart threshold. Restart the process after code or environment changes.
 
-## Daily Usage
+## Tests
 
-### Scheduling a Birthday Post
-
-1. An admin drops a birthday greeting image (PNG or JPG) into the **Rep Group**.
-2. The bot downloads it, sends it to Claude for OCR, and immediately quote-replies:
-
-```
-✅ Scheduled!
-
-📅 Date : 2026-09-22
-👤 Name : Lahiru Rasanga
-🆔 ID   : 7
-
-Ready for dispatch at 12:00 AM. Use /list to view all or /cancel 7 to remove.
-```
-
-3. At exactly **12:00 AM (Asia/Colombo)**, the bot sends the image + caption to the **Main Group** automatically.
-
-### Admin Commands (send in Rep Group)
-
-| Command | Description |
-|---|---|
-| `/list` | Show all pending scheduled posts |
-| `/cancel <id>` | Remove a pending post by its ID |
-| `/dispatch` | Manually trigger today's dispatch (for testing) |
-| `/help` | Show command list |
-
----
-
-## Database Schema
-
-```sql
-CREATE TABLE birthday_posts (
-  id          INTEGER PRIMARY KEY AUTOINCREMENT,
-  name        TEXT    NOT NULL,           -- Extracted student name
-  birthday    TEXT    NOT NULL,           -- ISO date: YYYY-MM-DD
-  image_path  TEXT    NOT NULL,           -- Absolute path on disk
-  status      TEXT    DEFAULT 'pending',  -- pending | completed | failed
-  msg_id      TEXT,                       -- WhatsApp message ID (for audit)
-  chat_id     TEXT,                       -- Rep group chat ID
-  created_at  TEXT    DEFAULT (datetime('now')),
-  posted_at   TEXT                        -- Set when dispatched
-);
-```
-
-You can query it directly for auditing:
-```bash
-sqlite3 data/birthdays.db "SELECT id, name, birthday, status FROM birthday_posts ORDER BY birthday;"
-```
-
----
-
-## How the AI Vision Works
-
-When an image arrives:
-
-1. The image is read from disk and base64-encoded.
-2. It's sent to **Claude claude-sonnet-4-6** with a focused system prompt:
-   - Extracts exactly two fields: `name` and `birthday` (YYYY-MM-DD)
-   - Returns pure JSON — no markdown, no prose
-3. The response is parsed and validated.
-4. If either field is null or the date format is wrong, the bot sends a warning in the Rep Group.
-
-The Claude vision model handles varied card designs, fonts, and layouts reliably.
-
----
-
-## Troubleshooting
-
-| Problem | Solution |
-|---|---|
-| QR code keeps reappearing | Delete `.wwebjs_auth/` and re-scan |
-| "Could not extract details from this image" | Ensure name and date are clearly readable; try higher-quality image |
-| Bot not responding in Rep Group | Double-check `REP_GROUP_ID` in `.env` |
-| Posts not dispatching at midnight | Verify `TIMEZONE=Asia/Colombo` and that PM2 is running |
-| Chrome not found error | Install Chromium: `sudo apt-get install chromium-browser` |
-
----
-
-## Security Notes
-
-- Never commit `.env` to git (it's in `.gitignore`)
-- Never commit `.wwebjs_auth/` — it contains your WhatsApp session tokens
-- The bot only responds to messages in the configured Rep Group; it ignores all other chats
-
----
-
-## Tech Stack
-
-| Component | Library |
-|---|---|
-| WhatsApp automation | [whatsapp-web.js](https://github.com/pedroslopez/whatsapp-web.js) |
-| AI Vision / OCR | [Anthropic Claude claude-sonnet-4-6](https://www.anthropic.com) |
-| Database | [better-sqlite3](https://github.com/WiseLibs/better-sqlite3) |
-| Scheduler | [node-cron](https://github.com/node-cron/node-cron) |
-| Process manager | [PM2](https://pm2.keymetrics.io) |
-
----
-
-*Built for the UColombo FoT 22/23 Batch 🎓*
+Run `npm test`. Regression tests use simulated WhatsApp/AI clients and an in-memory database, without accessing WhatsApp, Groq or production data.

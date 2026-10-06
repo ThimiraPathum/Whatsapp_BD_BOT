@@ -1,5 +1,7 @@
 'use strict';
 
+const { sendRepMessage } = require('./rep-messages');
+
 const db = require('./database');
 const fs = require('fs');
 const TIMEZONE = process.env.TIMEZONE || 'Asia/Colombo';
@@ -29,7 +31,7 @@ async function handleCommand(sock, chatId, text, dispatchNowFunction) {
     case '/cancel':
     case '/delete':
       if (parts.length < 2) {
-        await sock.sendMessage(chatId, { text: '⚠️ *ID not provided.*\n\nUsage: `/cancel [ID]`\n(Use `/list` to view IDs).' });
+        await sendRepMessage(sock, chatId, { text: '⚠️ *ID not provided.*\n\nUsage: `/cancel [ID]`\n(Use `/list` to view IDs).' });
         return;
       }
       await cancelPost(sock, chatId, parts[1]);
@@ -47,61 +49,35 @@ async function handleCommand(sock, chatId, text, dispatchNowFunction) {
 
     case '/dispatch':
       {
-        const msgKey = await sock.sendMessage(chatId, { text: '⚡ *Manual Dispatch Started!* Sending tonight\'s posts to the Main Group...' });
+        const msgKey = await sendRepMessage(sock, chatId, { text: '⚡ *Manual Dispatch Started!* Sending tonight\'s posts to the Main Group...' });
         if (dispatchNowFunction) {
           const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toLocaleDateString('en-CA', { timeZone: TIMEZONE });
           const count = await dispatchNowFunction(tomorrow);
-          await sock.sendMessage(chatId, { text: `╭━━━ ⚡ DISPATCH COMPLETE ━━━╮\n\n🎉 Successfully dispatched ${count || 0} birthdays to the Main Group.\n\n━━━━━━━━━━━━━━━━━━\n✅ Status: Manual Dispatch Finished`, edit: msgKey.key });
+          await sendRepMessage(sock, chatId, { text: `╭━━━ ⚡ DISPATCH COMPLETE ━━━╮\n\n🎉 Successfully dispatched ${count || 0} birthdays to the Main Group.\n\n━━━━━━━━━━━━━━━━━━\n✅ Status: Manual Dispatch Finished`, edit: msgKey.key });
         } else {
-          await sock.sendMessage(chatId, { text: '⚠️ Dispatch function is not ready yet.', edit: msgKey.key });
+          await sendRepMessage(sock, chatId, { text: '⚠️ Dispatch function is not ready yet.', edit: msgKey.key });
         }
       }
       break;
 
     case '/pause':
       db.setBotPaused(true);
-      await sock.sendMessage(chatId, { text: '╭━━━ ⏸️ BOT PAUSED ━━━╮\n\nThe bot is now paused.\n\n⚠️ It will NOT accept new flyers.\n⚠️ It will NOT dispatch scheduled posts.\n\nType `/resume` to start it again.\n━━━━━━━━━━━━━━━━━━' });
+      await sendRepMessage(sock, chatId, { text: '╭━━━ ⏸️ BOT PAUSED ━━━╮\n\nThe bot is now paused.\n\n⚠️ It will NOT accept new flyers.\n⚠️ It will NOT dispatch scheduled posts.\n\nType `/resume` to start it again.\n━━━━━━━━━━━━━━━━━━' });
       break;
 
     case '/clear-form':
       db.clearFormSubmissions();
-      await sock.sendMessage(chatId, { text: '✅ *Success!* All pending and designed form submissions have been wiped from the database. You can now re-sync from Google Sheets.' });
-      break;
-
-    case '/fix-pending':
-      {
-        const query = db.getDb().prepare(`
-          UPDATE form_submissions 
-          SET status = 'designed' 
-          WHERE status = 'pending_design' 
-          AND EXISTS (
-            SELECT 1 FROM birthday_posts 
-            WHERE birthday_posts.birthday = form_submissions.birthday
-            AND (
-              birthday_posts.name = form_submissions.name OR
-              form_submissions.name LIKE (
-                CASE 
-                  WHEN instr(birthday_posts.name, ' ') > 0 
-                  THEN substr(birthday_posts.name, 1, instr(birthday_posts.name, ' ') - 1) 
-                  ELSE birthday_posts.name 
-                END
-              ) || '%'
-            )
-          )
-        `);
-        const info = query.run();
-        await sock.sendMessage(chatId, { text: `✅ *Success!* Fixed ${info.changes} stuck pending designs.` });
-      }
+      await sendRepMessage(sock, chatId, { text: '✅ *Success!* All pending and designed form submissions have been wiped from the database. You can now re-sync from Google Sheets.' });
       break;
 
     case '/resume':
       db.setBotPaused(false);
-      await sock.sendMessage(chatId, { text: '╭━━━ ▶️ BOT RESUMED ━━━╮\n\nThe bot is now active.\n\n✅ Ready to accept new flyers.\n✅ Scheduled posts will be dispatched.\n━━━━━━━━━━━━━━━━━━' });
+      await sendRepMessage(sock, chatId, { text: '╭━━━ ▶️ BOT RESUMED ━━━╮\n\nThe bot is now active.\n\n✅ Ready to accept new flyers.\n✅ Scheduled posts will be dispatched.\n━━━━━━━━━━━━━━━━━━' });
       break;
 
     default:
       if (cmd !== '/add' && cmd !== '/id') {
-          await sock.sendMessage(chatId, { text: '❓ *Invalid Command!*\nType `/help` for the command list.' });
+          await sendRepMessage(sock, chatId, { text: '❓ *Invalid Command!*\nType `/help` for the command list.' });
       }
       break;
   }
@@ -161,14 +137,14 @@ Turn the bot off or on in an emergency.
 
 ━━━━━━━━━━━━━━━━━━
 🤖 Automated Birthday Bot`;
-  await sock.sendMessage(chatId, { text: menu.trim() });
+  await sendRepMessage(sock, chatId, { text: menu.trim() });
 }
 
 async function listPendingPosts(sock, chatId) {
   const pending = db.listPending();
   
   if (pending.length === 0) {
-    await sock.sendMessage(chatId, { text: '╭━━━ 📅 UPCOMING BIRTHDAYS ━━━╮\n　　　　　Pending Queue\n\n━━━━━━━━━━━━━━━━━━\n\n✅ No posts are currently scheduled.' });
+    await sendRepMessage(sock, chatId, { text: '╭━━━ 📅 UPCOMING BIRTHDAYS ━━━╮\n　　　　　Pending Queue\n\n━━━━━━━━━━━━━━━━━━\n\n✅ No posts are currently scheduled.' });
     return;
   }
 
@@ -182,7 +158,7 @@ async function listPendingPosts(sock, chatId) {
   
   msg += `━━━━━━━━━━━━━━━━━━\n\n📌 Total Pending: ${pending.length}\n\nThese birthdays are waiting for their scheduled dispatch.`;
 
-  await sock.sendMessage(chatId, { text: msg.trim() });
+  await sendRepMessage(sock, chatId, { text: msg.trim() });
 }
 
 async function showTonightBirthdays(sock, chatId) {
@@ -190,7 +166,7 @@ async function showTonightBirthdays(sock, chatId) {
   const todaysPosts = db.getPendingForToday(tomorrow);
 
   if (todaysPosts.length === 0) {
-    await sock.sendMessage(chatId, { text: `╭━━━ 🌙 TONIGHT'S DISPATCH ━━━╮\n\n📅 For Date: ${tomorrow}\n\n━━━━━━━━━━━━━━━━━━\n\n✅ No birthdays scheduled for tonight.` });
+    await sendRepMessage(sock, chatId, { text: `╭━━━ 🌙 TONIGHT'S DISPATCH ━━━╮\n\n📅 For Date: ${tomorrow}\n\n━━━━━━━━━━━━━━━━━━\n\n✅ No birthdays scheduled for tonight.` });
     return;
   }
 
@@ -201,19 +177,19 @@ async function showTonightBirthdays(sock, chatId) {
   
   msg += `\n━━━━━━━━━━━━━━━━━━\n\n🕛 Automatic Dispatch: 12:00 AM\n\n⚡ Use /dispatch to send these birthdays immediately.`;
 
-  await sock.sendMessage(chatId, { text: msg.trim() });
+  await sendRepMessage(sock, chatId, { text: msg.trim() });
 }
 
 async function cancelPost(sock, chatId, idStr) {
   const id = parseInt(idStr, 10);
   if (isNaN(id)) {
-    await sock.sendMessage(chatId, { text: '⚠️ *Invalid ID!* Please provide a valid number.' });
+    await sendRepMessage(sock, chatId, { text: '⚠️ *Invalid ID!* Please provide a valid number.' });
     return;
   }
 
   const post = db.getPostById(id);
   if (!post || post.status !== 'pending') {
-    await sock.sendMessage(chatId, { text: `⚠️ Could not find a pending post with ID: ${id}.` });
+    await sendRepMessage(sock, chatId, { text: `⚠️ Could not find a pending post with ID: ${id}.` });
     return;
   }
 
@@ -226,10 +202,10 @@ async function cancelPost(sock, chatId, idStr) {
       } catch (err) {}
     }
     const cancelMsg = `╭━━━ 🗑️ POST DELETED ━━━╮\n\nThe scheduled birthday has been successfully deleted.\n\n🆔 Post ID: #${id}\n👤 Name: ${post.name}\n📅 Date: ${post.birthday}\n\n━━━━━━━━━━━━━━━━━━\n✅ Status: Successfully Deleted`;
-    await sock.sendMessage(chatId, { text: cancelMsg });
+    await sendRepMessage(sock, chatId, { text: cancelMsg });
     console.log(`[Commands] Canceled post ID: ${id} and deleted image.`);
   } else {
-    await sock.sendMessage(chatId, { text: `⚠️ Could not find a pending post with ID: ${id}.` });
+    await sendRepMessage(sock, chatId, { text: `⚠️ Could not find a pending post with ID: ${id}.` });
   }
 }
 
@@ -246,14 +222,14 @@ async function showDesignStatus(sock, chatId, argMonth) {
   }
 
   if (targetMonth === 'NaN' || targetMonth.length !== 2) {
-    return await sock.sendMessage(chatId, { text: '⚠️ *Invalid Month!*\nUse: `/status`, `/status next`, or `/status 10`' });
+    return await sendRepMessage(sock, chatId, { text: '⚠️ *Invalid Month!*\nUse: `/status`, `/status next`, or `/status 10`' });
   }
 
   const submissions = db.getFormSubmissionsByMonth(`-${targetMonth}-`);
   const manuals = db.getManualAdditionsByMonth(`-${targetMonth}-`);
 
   if (submissions.length === 0 && manuals.length === 0) {
-    return await sock.sendMessage(chatId, { text: `╭━━━ 📊 MONTHLY REPORT (Month: ${targetMonth}) ━━━╮\n\nNo birthdays found for this month.\n\n━━━━━━━━━━━━━━━━━━` });
+    return await sendRepMessage(sock, chatId, { text: `╭━━━ 📊 MONTHLY REPORT (Month: ${targetMonth}) ━━━╮\n\nNo birthdays found for this month.\n\n━━━━━━━━━━━━━━━━━━` });
   }
 
   const designed = submissions.filter(s => s.status === 'designed');
@@ -290,7 +266,7 @@ async function showDesignStatus(sock, chatId, argMonth) {
   }
   
   msg += `\n━━━━━━━━━━━━━━━━━━`;
-  await sock.sendMessage(chatId, { text: msg });
+  await sendRepMessage(sock, chatId, { text: msg });
 }
 
 module.exports = { handleCommand };

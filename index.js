@@ -1,5 +1,7 @@
 'use strict';
 
+const { sendRepMessage } = require('./src/rep-messages');
+
 /**
  * index.js — WhatsApp Birthday Bot (Baileys)
  * University of Colombo, Faculty of Technology — 22/23 Batch
@@ -69,7 +71,7 @@ app.post('/api/submit-form', async (req, res) => {
 
     if (submissionMonth === currentMonth && globalSock && process.env.REP_GROUP_ID) {
       const alertMsg = `╭━━━ 🚨 URGENT: NEW SUBMISSION ━━━╮\n\nA new birthday form was submitted for THIS MONTH!\n\n👤 Name: ${name}\n📅 Date: ${birthday}\n\n🖼️ Photo Link:\n${photoUrl}\n\n━━━━━━━━━━━━━━━━━━\nPlease design and upload the flyer ASAP.`;
-      await globalSock.sendMessage(process.env.REP_GROUP_ID, { text: alertMsg });
+      await sendRepMessage(globalSock, process.env.REP_GROUP_ID, { text: alertMsg });
     }
 
     res.json({ success: true });
@@ -90,7 +92,7 @@ process.on('uncaughtException', async (err) => {
   console.error('[Fatal Error] Uncaught Exception:', err);
   if (globalSock && REP_GROUP_ID) {
     try {
-      await globalSock.sendMessage(REP_GROUP_ID, { 
+      await sendRepMessage(globalSock, REP_GROUP_ID, {
         text: `╭━━━ 🚨 CRITICAL ERROR ━━━╮\n\nThe bot has encountered a fatal error and crashed!\n\n⚠️ *Error:*\n${err.message}\n\n━━━━━━━━━━━━━━━━━━\nBot is now restarting...` 
       });
     } catch (e) {
@@ -106,7 +108,7 @@ process.on('unhandledRejection', async (reason, promise) => {
     try {
       // Stringify reason to avoid object [Object object]
       const reasonText = reason instanceof Error ? reason.message : String(reason);
-      await globalSock.sendMessage(REP_GROUP_ID, { 
+      await sendRepMessage(globalSock, REP_GROUP_ID, {
         text: `╭━━━ 🚨 CRITICAL ERROR ━━━╮\n\nThe bot has encountered an unhandled rejection and crashed!\n\n⚠️ *Reason:*\n${reasonText}\n\n━━━━━━━━━━━━━━━━━━\nBot is now restarting...` 
       });
     } catch (e) {
@@ -228,9 +230,9 @@ async function startBot() {
             const deletedMsg = `╭━━━ 🗑️ POST DELETED ━━━╮\n\nThe birthday post has been removed from the queue.\n\n👤 Name: ${post ? post.name : 'Unknown'}\n🆔 Post ID: #${reactionData.postId}\n\n━━━━━━━━━━━━━━━━━━\n✅ Status: Deleted`;
             
             if (reactionData.originalKey) {
-              await sock.sendMessage(msg.key.remoteJid, { text: deletedMsg, edit: reactionData.originalKey });
+              await sendRepMessage(sock, msg.key.remoteJid, { text: deletedMsg, edit: reactionData.originalKey });
             } else {
-              await sock.sendMessage(msg.key.remoteJid, { text: deletedMsg });
+              await sendRepMessage(sock, msg.key.remoteJid, { text: deletedMsg });
             }
           }
         }
@@ -272,16 +274,16 @@ async function dispatchApprovedPost(sock, postId, repChatId, editKey = null) {
 
     const dispatchMsg = `╭━━━ ⚡ DISPATCHED ━━━╮\n\n🎉 Birthday sent successfully to the Main Group.\n\n👤 Name: ${post.name}\n🆔 Post ID: #${postId}\n\n━━━━━━━━━━━━━━━━━━\n✅ Status: Dispatched Immediately`;
     if (editKey) {
-      await sock.sendMessage(repChatId, { text: dispatchMsg, edit: editKey });
+      await sendRepMessage(sock, repChatId, { text: dispatchMsg, edit: editKey });
     } else {
-      await sock.sendMessage(repChatId, { text: dispatchMsg });
+      await sendRepMessage(sock, repChatId, { text: dispatchMsg });
     }
   } catch (err) {
     console.error('[Bot] Poll dispatch failed:', err);
     if (editKey) {
-      await sock.sendMessage(repChatId, { text: `⚠️ Saved to DB (ID: #${postId}) but immediate dispatch failed. Will retry at midnight.`, edit: editKey });
+      await sendRepMessage(sock, repChatId, { text: `⚠️ Saved to DB (ID: #${postId}) but immediate dispatch failed. Will retry at midnight.`, edit: editKey });
     } else {
-      await sock.sendMessage(repChatId, { text: `⚠️ Saved to DB (ID: #${postId}) but immediate dispatch failed. Will retry at midnight.` });
+      await sendRepMessage(sock, repChatId, { text: `⚠️ Saved to DB (ID: #${postId}) but immediate dispatch failed. Will retry at midnight.` });
     }
   }
 }
@@ -304,7 +306,7 @@ async function handleIncomingMessage(msg) {
     '';
 
   if (body.trim() === '/id') {
-    await sock.sendMessage(chatId, { text: `📌 *Group ID:*\n${chatId}` }, { quoted: msg });
+    await sendRepMessage(sock, chatId, { text: `📌 *Group ID:*\n${chatId}` }, { quoted: msg });
     return;
   }
 
@@ -322,7 +324,7 @@ async function handleIncomingMessage(msg) {
   // 2. ෆොටෝ එකක් නැතුව නිකම්ම /add ගැහුවොත් බ්ලොක් කිරීම
   if (trimmed.startsWith('/add') && !hasImage) {
     const flyerMissingMsg = `╭━━━ 📸 FLYER REQUIRED ━━━╮\n\nA birthday flyer/photo is required to create a birthday post.\n\nPlease upload the flyer and use this caption:\n\n/add [Name] | [Date]\n\n💡 Example:\n/add Kasun | 2026-09-18\n\n━━━━━━━━━━━━━━━━━━\n❌ Text-only birthday posts are not accepted.`;
-    await sock.sendMessage(chatId, { text: flyerMissingMsg }, { quoted: msg });
+    await sendRepMessage(sock, chatId, { text: flyerMissingMsg }, { quoted: msg });
     return;
   }
 
@@ -331,7 +333,7 @@ async function handleIncomingMessage(msg) {
 
   // 4. Bot Pause කරලා තියෙනවද කියලා බලනවා
   if (db.isBotPaused()) {
-    await sock.sendMessage(chatId, { text: '⚠️ *Bot is currently PAUSED.*\n\nFlyers are not being accepted right now. Type `/resume` to turn the bot back on.' }, { quoted: msg });
+    await sendRepMessage(sock, chatId, { text: '⚠️ *Bot is currently PAUSED.*\n\nFlyers are not being accepted right now. Type `/resume` to turn the bot back on.' }, { quoted: msg });
     return;
   }
 
@@ -348,7 +350,7 @@ async function handleIncomingMessage(msg) {
     const parts = content.split('|').map((p) => p.trim());
     if (parts.length < 2) {
       const invalidFormatMsg = `╭━━━ ⚠️ INVALID FORMAT ━━━╮\n\nThe AI could not extract the birthday details from this flyer.\n\n📸 Please re-upload the flyer.\n\nIf the problem continues, add the following as the caption:\n\n/add [Name] | [Date]\n\n💡 Example:\n/add Kasun | 2026-09-18\n\n━━━━━━━━━━━━━━━━━━\n🔄 Please try again.`;
-      await sock.sendMessage(chatId, { text: invalidFormatMsg }, { quoted: msg });
+      await sendRepMessage(sock, chatId, { text: invalidFormatMsg }, { quoted: msg });
       return;
     }
     name = parts[0];
@@ -360,22 +362,22 @@ async function handleIncomingMessage(msg) {
   // Loading Message
   let loadingMsg;
   if (!isManualAdd) {
-    loadingMsg = await sock.sendMessage(chatId, { text: '🔍 Analysing flyer with AI… please wait.' }, { quoted: msg });
+    loadingMsg = await sendRepMessage(sock, chatId, { text: '🔍 Analysing flyer with AI… please wait.' }, { quoted: msg });
   } else {
-    loadingMsg = await sock.sendMessage(chatId, { text: '⚙️ Processing manual entry with Flyer...' }, { quoted: msg });
+    loadingMsg = await sendRepMessage(sock, chatId, { text: '⚙️ Processing manual entry with Flyer...' }, { quoted: msg });
   }
 
   // Helper to Edit Loading Message (Prevents "Message Deleted" tombstones)
   const editLoading = async (newText) => {
     if (loadingMsg) {
       try { 
-        await sock.sendMessage(chatId, { text: newText, edit: loadingMsg.key }); 
+        await sendRepMessage(sock, chatId, { text: newText, edit: loadingMsg.key });
       } catch(e) {
         // Fallback if edit fails
-        await sock.sendMessage(chatId, { text: newText }, { quoted: msg });
+        await sendRepMessage(sock, chatId, { text: newText }, { quoted: msg });
       }
     } else {
-      await sock.sendMessage(chatId, { text: newText }, { quoted: msg });
+      await sendRepMessage(sock, chatId, { text: newText }, { quoted: msg });
     }
   };
 

@@ -37,7 +37,7 @@ async function extractBirthdayDetails(imagePath) {
               content: [
                 {
                   type: 'text',
-                  text: `Extract the person's name and birthday from this flyer. Return ONLY a valid JSON object with keys "name" and "birthday". The birthday format must be YYYY-MM-DD (if year is missing, assume current year ${new Date().getFullYear()}). Example: {"name": "Kasun Perera", "birthday": "${new Date().getFullYear()}-09-18"}. Do not include any markdown formatting or extra text outside the JSON.`
+                  text: `Analyze this image. Determine if it is a completed Birthday Greeting Design (Flyer) or just a raw photograph of a person. A completed flyer will have decorative text like 'Happy Birthday', graphics, and a prominently displayed date. If it is just a raw photograph (even if it has a watermark), return exactly the JSON object: {"status": "IGNORE"}. If it IS a completed flyer, extract the name and date and return the JSON object: {"status": "OK", "name": "Kasun Perera", "birthday": "${new Date().getFullYear()}-09-18"}. Do not include any markdown formatting or extra text.`
                 },
                 {
                   type: 'image_url',

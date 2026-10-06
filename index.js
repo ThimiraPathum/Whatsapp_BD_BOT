@@ -400,12 +400,19 @@ async function handleIncomingMessage(msg) {
     try { await sock.sendPresenceUpdate('composing', chatId); } catch (e) {}
     const details = await extractBirthdayDetails(imagePath);
     try { await sock.sendPresenceUpdate('paused', chatId); } catch (e) {}
-    if (!details) {
+    if (!details || (details.status && details.status !== 'OK' && details.status !== 'IGNORE')) {
       if (fs.existsSync(imagePath)) fs.unlinkSync(imagePath);
       const aiFailedMsg = `╭━━━ ⚠️ FLYER NOT READ ━━━╮\n\nThe AI could not extract the birthday details from this flyer.\n\n📸 Please re-upload the flyer.\n\nIf the problem continues, add the following as the caption:\n\n/add [Name] | [Date]\n\n💡 Example:\n/add Kasun | 2026-09-18\n\n━━━━━━━━━━━━━━━━━━\n🔄 Please try again.`;
       await editLoading(aiFailedMsg);
       return;
     }
+    
+    if (details.status === 'IGNORE') {
+      if (fs.existsSync(imagePath)) fs.unlinkSync(imagePath);
+      await editLoading('📷 Ignored: Raw Photo Detected');
+      return;
+    }
+
     name = details.name;
     birthday = details.birthday;
   }

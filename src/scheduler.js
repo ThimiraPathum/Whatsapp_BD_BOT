@@ -174,6 +174,9 @@ function startDailyPreview(sock, repGroupId) {
       const pendingSubmissions = db.getDb().prepare("SELECT * FROM form_submissions WHERE birthday LIKE ? AND status = 'pending_design'").all(`%-${tomorrowMonthDay}`);
       
       if (pendingSubmissions.length > 0) {
+        // Add a 2-second delay so WhatsApp doesn't block the second message for being too fast
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
         let warningMsg = `╭━━━ 🚨 EMERGENCY WARNING ━━━╮\n\n⚠️ UNFINISHED DESIGNS DETECTED!\n\nThe following birthdays are TOMORROW, but their flyers have NOT been designed yet:\n\n`;
         pendingSubmissions.forEach(s => {
           warningMsg += `• ${s.name}\n`;

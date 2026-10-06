@@ -72,14 +72,23 @@ function initSchema() {
     WHERE substr(birthday, 1, 4) != strftime('%Y', 'now') 
       AND substr(birthday, 1, 4) != cast(strftime('%Y', 'now') + 1 as text);
 
-    -- 3. Mark as designed if it matches existing post
+    -- 3. Mark as designed if it matches existing post (using first word of the name to avoid typos)
     UPDATE form_submissions 
     SET status = 'designed' 
     WHERE status = 'pending_design' 
     AND EXISTS (
       SELECT 1 FROM birthday_posts 
-      WHERE birthday_posts.name = form_submissions.name 
-      AND birthday_posts.birthday = form_submissions.birthday
+      WHERE birthday_posts.birthday = form_submissions.birthday
+      AND (
+        birthday_posts.name = form_submissions.name OR
+        form_submissions.name LIKE (
+          CASE 
+            WHEN instr(birthday_posts.name, ' ') > 0 
+            THEN substr(birthday_posts.name, 1, instr(birthday_posts.name, ' ') - 1) 
+            ELSE birthday_posts.name 
+          END
+        ) || '%'
+      )
     );
   `);
 }
@@ -109,10 +118,12 @@ function clearFormSubmissions() {
 }
 
 function markDesignCompleted(name, birthday) {
+  // Use the first word of the name to avoid mismatching due to minor spelling/spacing differences
+  const firstWord = name.trim().split(/\s+/)[0];
   const stmt = getDb().prepare(
-    "UPDATE form_submissions SET status = 'designed' WHERE name = ? AND birthday = ? AND status = 'pending_design'"
+    "UPDATE form_submissions SET status = 'designed' WHERE birthday = ? AND status = 'pending_design' AND name LIKE ?"
   );
-  stmt.run(name, birthday);
+  stmt.run(birthday, `${firstWord}%`);
 }
 
 // ─── CRUD ────────────────────────────────────────────────────────────────────

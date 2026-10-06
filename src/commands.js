@@ -68,6 +68,32 @@ async function handleCommand(sock, chatId, text, dispatchNowFunction) {
       await sock.sendMessage(chatId, { text: '✅ *Success!* All pending and designed form submissions have been wiped from the database. You can now re-sync from Google Sheets.' });
       break;
 
+    case '/fix-pending':
+      {
+        const query = db.getDb().prepare(`
+          UPDATE form_submissions 
+          SET status = 'designed' 
+          WHERE status = 'pending_design' 
+          AND EXISTS (
+            SELECT 1 FROM birthday_posts 
+            WHERE birthday_posts.birthday = form_submissions.birthday
+            AND (
+              birthday_posts.name = form_submissions.name OR
+              form_submissions.name LIKE (
+                CASE 
+                  WHEN instr(birthday_posts.name, ' ') > 0 
+                  THEN substr(birthday_posts.name, 1, instr(birthday_posts.name, ' ') - 1) 
+                  ELSE birthday_posts.name 
+                END
+              ) || '%'
+            )
+          )
+        `);
+        const info = query.run();
+        await sock.sendMessage(chatId, { text: `✅ *Success!* Fixed ${info.changes} stuck pending designs.` });
+      }
+      break;
+
     case '/resume':
       db.setBotPaused(false);
       await sock.sendMessage(chatId, { text: '╭━━━ ▶️ BOT RESUMED ━━━╮\n\nThe bot is now active.\n\n✅ Ready to accept new flyers.\n✅ Scheduled posts will be dispatched.\n━━━━━━━━━━━━━━━━━━' });

@@ -1,10 +1,12 @@
 'use strict';
 
 const { sendRepMessage } = require('./rep-messages');
+const { card, formatDate, postDetails } = require('./message-layout');
 
 const db = require('./database');
 const fs = require('fs');
 const TIMEZONE = process.env.TIMEZONE || 'Asia/Colombo';
+const TIMEZONE_LABEL = TIMEZONE === 'Asia/Colombo' ? 'Sri Lanka time' : TIMEZONE;
 
 /**
  * Handle custom commands in the Rep Group
@@ -31,7 +33,7 @@ async function handleCommand(sock, chatId, text, dispatchNowFunction) {
     case '/cancel':
     case '/delete':
       if (parts.length < 2) {
-        await sendRepMessage(sock, chatId, { text: '⚠️ *ID not provided.*\n\nUsage: `/cancel [ID]`\n(Use `/list` to view IDs).' });
+        await sendRepMessage(sock, chatId, { text: card('⚠️ Post ID not provided', 'Choose a post with `/list`, then use its ID.', '*Example*\n`/cancel 18`') });
         return;
       }
       await cancelPost(sock, chatId, parts[1]);
@@ -49,116 +51,66 @@ async function handleCommand(sock, chatId, text, dispatchNowFunction) {
 
     case '/dispatch':
       {
-        const msgKey = await sendRepMessage(sock, chatId, { text: '⚡ *Manual Dispatch Started!* Sending tonight\'s posts to the Main Group...' });
+        const msgKey = await sendRepMessage(sock, chatId, { text: card('⏳ Sending birthday posts', 'Sending tonight’s posts to the Main Group now…') });
         if (dispatchNowFunction) {
           const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toLocaleDateString('en-CA', { timeZone: TIMEZONE });
           const count = await dispatchNowFunction(tomorrow);
-          await sendRepMessage(sock, chatId, { text: `╭━━━ ⚡ DISPATCH COMPLETE ━━━╮\n\n🎉 Successfully dispatched ${count || 0} birthdays to the Main Group.\n\n━━━━━━━━━━━━━━━━━━\n✅ Status: Manual Dispatch Finished`, edit: msgKey.key });
+          await sendRepMessage(sock, chatId, { text: card('✅ Dispatch complete', `📅 ${formatDate(tomorrow)}\n📤 *Sent to Main Group: ${count || 0}*`, 'Successfully sent posts will not be sent again at midnight.'), edit: msgKey.key });
         } else {
-          await sendRepMessage(sock, chatId, { text: '⚠️ Dispatch function is not ready yet.', edit: msgKey.key });
+          await sendRepMessage(sock, chatId, { text: card('⏳ Dispatch not ready', 'Please wait a moment and try `/dispatch` again.\nNo posts were sent.'), edit: msgKey.key });
         }
       }
       break;
 
     case '/pause':
       db.setBotPaused(true);
-      await sendRepMessage(sock, chatId, { text: '╭━━━ ⏸️ BOT PAUSED ━━━╮\n\nThe bot is now paused.\n\n⚠️ It will NOT accept new flyers.\n⚠️ It will NOT dispatch scheduled posts.\n\nType `/resume` to start it again.\n━━━━━━━━━━━━━━━━━━' });
+      await sendRepMessage(sock, chatId, { text: card('⏸️ Bot paused', '📸 Flyer uploads are paused.\n🕛 Scheduled sending is paused.', 'Use `/resume` to continue.') });
       break;
 
     case '/clear-form':
       db.clearFormSubmissions();
-      await sendRepMessage(sock, chatId, { text: '✅ *Success!* All pending and designed form submissions have been wiped from the database. You can now re-sync from Google Sheets.' });
+      await sendRepMessage(sock, chatId, { text: card('🧹 Form entries cleared', 'All form submissions have been cleared, including completed designs.\nBirthday posts have not been removed.', 'You can now sync the form data from Google Sheets again.') });
       break;
 
     case '/resume':
       db.setBotPaused(false);
-      await sendRepMessage(sock, chatId, { text: '╭━━━ ▶️ BOT RESUMED ━━━╮\n\nThe bot is now active.\n\n✅ Ready to accept new flyers.\n✅ Scheduled posts will be dispatched.\n━━━━━━━━━━━━━━━━━━' });
+      await sendRepMessage(sock, chatId, { text: card('▶️ Bot resumed', '📸 Ready for new flyers.\n🕛 Scheduled sending is active.') });
       break;
 
     default:
       if (cmd !== '/add' && cmd !== '/id') {
-          await sendRepMessage(sock, chatId, { text: '❓ *Invalid Command!*\nType `/help` for the command list.' });
+          await sendRepMessage(sock, chatId, { text: card('❓ Invalid command', 'Use `/help` to see the available commands.') });
       }
       break;
   }
 }
 
 async function showHelpMenu(sock, chatId) {
-  const menu = `╭━━━ 🤖 BIRTHDAY BOT ━━━╮
-　　　　　Command Guide
-
-━━━━━━━━━━━━━━━━━━
-
-📊 FORM & STATUS
-
-🔹 /status
-View this month's design progress.
-
-🔹 /status next (or /status 10)
-View next month's (or specific month's) design progress.
-
-━━━━━━━━━━━━━━━━━━
-
-🎂 BIRTHDAY MANAGEMENT
-
-🔹 /add [Name] | [Date]
-Manual fallback if AI fails to read the flyer.
-
-📸 Photo required
-
-Example:
-/add Kasun | 2026-09-18
-
-━━━━━━━━━━━━━━━━━━
-
-📋 VIEW BIRTHDAYS
-
-🔹 /list or /pending
-View all upcoming scheduled birthdays.
-
-🔹 /today or /tonight
-View birthdays scheduled for tonight's dispatch.
-
-━━━━━━━━━━━━━━━━━━
-
-🛠️ ACTIONS
-
-🔹 /cancel [ID]
-Delete a scheduled birthday.
-
-Example:
-/cancel 5
-
-🔹 /dispatch
-Manually dispatch tonight's birthdays immediately.
-
-🔹 /pause & /resume
-Turn the bot off or on in an emergency.
-
-━━━━━━━━━━━━━━━━━━
-🤖 Automated Birthday Bot`;
-  await sendRepMessage(sock, chatId, { text: menu.trim() });
+  const menu = card('🤖 Command guide',
+    '*📊 Design progress*\n`/status` — This month\n`/status next` — Next month\n`/status 10` — October',
+    '*📸 Add a birthday*\nUpload a finished flyer.\nIf AI cannot read it, upload it again with this caption:\n`/add Kasun Perera | 2026-10-20`\n\nUse the correct name and date. A flyer image is required.',
+    '*📋 View posts*\n`/list` or `/pending` — All posts waiting to be sent\n`/tonight` or `/today` — Upcoming midnight’s posts',
+    '*🛠️ Manage posts*\n`/cancel 18` — Remove post #18\n`/dispatch` — Send tonight’s posts immediately',
+    '*⏯️ Bot controls*\n`/pause` — Pause uploads and sending\n`/resume` — Resume both',
+    `🕛 All times: ${TIMEZONE_LABEL}`
+  );
+  await sendRepMessage(sock, chatId, { text: menu });
 }
 
 async function listPendingPosts(sock, chatId) {
   const pending = db.listPending();
   
   if (pending.length === 0) {
-    await sendRepMessage(sock, chatId, { text: '╭━━━ 📅 UPCOMING BIRTHDAYS ━━━╮\n　　　　　Pending Queue\n\n━━━━━━━━━━━━━━━━━━\n\n✅ No posts are currently scheduled.' });
+    await sendRepMessage(sock, chatId, { text: card('📋 Birthday queue', 'No posts are waiting to be sent.', 'Upload a birthday flyer to add a post.') });
     return;
   }
 
-  let msg = `╭━━━ 📅 UPCOMING BIRTHDAYS ━━━╮\n　　　　　Pending Queue\n\n━━━━━━━━━━━━━━━━━━\n\n`;
-  pending.forEach((p, i) => {
-    msg += `🆔 #${p.id}\n👤 ${p.name}\n📅 ${p.birthday}\n\n`;
-    if (i !== pending.length - 1) {
-      msg += `──────────────────\n\n`;
-    }
-  });
-  
-  msg += `━━━━━━━━━━━━━━━━━━\n\n📌 Total Pending: ${pending.length}\n\nThese birthdays are waiting for their scheduled dispatch.`;
-
-  await sendRepMessage(sock, chatId, { text: msg.trim() });
+  const msg = card('📋 Birthday queue',
+    `*Waiting to be sent: ${pending.length}*`,
+    ...pending.map(p => postDetails(p.name, p.birthday, p.id)),
+    `🕛 Scheduled for 12:00 AM · ${TIMEZONE_LABEL}\nTo remove a post: \`/cancel [ID]\``
+  );
+  await sendRepMessage(sock, chatId, { text: msg });
 }
 
 async function showTonightBirthdays(sock, chatId) {
@@ -166,30 +118,28 @@ async function showTonightBirthdays(sock, chatId) {
   const todaysPosts = db.getPendingForToday(tomorrow);
 
   if (todaysPosts.length === 0) {
-    await sendRepMessage(sock, chatId, { text: `╭━━━ 🌙 TONIGHT'S DISPATCH ━━━╮\n\n📅 For Date: ${tomorrow}\n\n━━━━━━━━━━━━━━━━━━\n\n✅ No birthdays scheduled for tonight.` });
+    await sendRepMessage(sock, chatId, { text: card('🌙 Tonight’s posts', `📅 ${formatDate(tomorrow)} · 12:00 AM\n🕛 ${TIMEZONE_LABEL}`, 'No posts are scheduled for this date.\nUse `/status` to check for missing designs.') });
     return;
   }
 
-  let msg = `╭━━━ 🌙 TONIGHT'S DISPATCH ━━━╮\n\n📅 For Date: ${tomorrow}\n\n━━━━━━━━━━━━━━━━━━\n\n`;
-  todaysPosts.forEach(p => {
-    msg += `🆔 #${p.id} — 👤 ${p.name}\n`;
-  });
-  
-  msg += `\n━━━━━━━━━━━━━━━━━━\n\n🕛 Automatic Dispatch: 12:00 AM\n\n⚡ Use /dispatch to send these birthdays immediately.`;
-
-  await sendRepMessage(sock, chatId, { text: msg.trim() });
+  const msg = card('🌙 Tonight’s posts',
+    `📅 ${formatDate(tomorrow)} · 12:00 AM\n📍 Main Group · ${TIMEZONE_LABEL}`,
+    `*Ready to send: ${todaysPosts.length}*\n${todaysPosts.map(p => `• ${p.name} · #${p.id}`).join('\n')}`,
+    'These posts are scheduled to send automatically.\nUse `/dispatch` to send them early, right now.'
+  );
+  await sendRepMessage(sock, chatId, { text: msg });
 }
 
 async function cancelPost(sock, chatId, idStr) {
   const id = parseInt(idStr, 10);
   if (isNaN(id)) {
-    await sendRepMessage(sock, chatId, { text: '⚠️ *Invalid ID!* Please provide a valid number.' });
+    await sendRepMessage(sock, chatId, { text: card('⚠️ Invalid post ID', 'Use the number shown in `/list`.', '*Example*\n`/cancel 18`') });
     return;
   }
 
   const post = db.getPostById(id);
   if (!post || post.status !== 'pending') {
-    await sendRepMessage(sock, chatId, { text: `⚠️ Could not find a pending post with ID: ${id}.` });
+    await sendRepMessage(sock, chatId, { text: card('🔎 Post not found', `Could not find a pending post with ID #${id}.`, 'Use `/list` to see posts waiting to be sent.') });
     return;
   }
 
@@ -201,11 +151,11 @@ async function cancelPost(sock, chatId, idStr) {
         fs.unlinkSync(post.image_path);
       } catch (err) {}
     }
-    const cancelMsg = `╭━━━ 🗑️ POST DELETED ━━━╮\n\nThe scheduled birthday has been successfully deleted.\n\n🆔 Post ID: #${id}\n👤 Name: ${post.name}\n📅 Date: ${post.birthday}\n\n━━━━━━━━━━━━━━━━━━\n✅ Status: Successfully Deleted`;
+    const cancelMsg = card('🗑️ Birthday cancelled', postDetails(post.name, post.birthday, id), 'Removed from the queue. This post will not be sent.');
     await sendRepMessage(sock, chatId, { text: cancelMsg });
     console.log(`[Commands] Canceled post ID: ${id} and deleted image.`);
   } else {
-    await sendRepMessage(sock, chatId, { text: `⚠️ Could not find a pending post with ID: ${id}.` });
+    await sendRepMessage(sock, chatId, { text: card('🔎 Post not found', `Could not find a pending post with ID #${id}.`, 'Use `/list` to see posts waiting to be sent.') });
   }
 }
 
@@ -222,50 +172,31 @@ async function showDesignStatus(sock, chatId, argMonth) {
   }
 
   if (targetMonth === 'NaN' || targetMonth.length !== 2) {
-    return await sendRepMessage(sock, chatId, { text: '⚠️ *Invalid Month!*\nUse: `/status`, `/status next`, or `/status 10`' });
+    return await sendRepMessage(sock, chatId, { text: card('⚠️ Invalid month', 'Use `/status` for this month, `/status next` for next month, or `/status 10` for October.') });
   }
 
+  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const monthName = monthNames[Number(targetMonth) - 1] || `Month ${targetMonth}`;
   const submissions = db.getFormSubmissionsByMonth(`-${targetMonth}-`);
   const manuals = db.getManualAdditionsByMonth(`-${targetMonth}-`);
 
   if (submissions.length === 0 && manuals.length === 0) {
-    return await sendRepMessage(sock, chatId, { text: `╭━━━ 📊 MONTHLY REPORT (Month: ${targetMonth}) ━━━╮\n\nNo birthdays found for this month.\n\n━━━━━━━━━━━━━━━━━━` });
+    return await sendRepMessage(sock, chatId, { text: card(`📊  ${monthName} birthdays`, 'No form entries or birthday posts found for this month.') });
   }
 
   const designed = submissions.filter(s => s.status === 'designed');
   const pending = submissions.filter(s => s.status === 'pending_design');
 
-  let msg = `┏━━━━━━━━━━━━━━━━━━━━┓\n   📅 MONTH: ${targetMonth} SUMMARY\n┗━━━━━━━━━━━━━━━━━━━━┛\n\n`;
-  
-  msg += `✅ Scheduled & Ready (Google Sheet) (${designed.length}):\n`;
-  if (designed.length > 0) {
-    designed.forEach(s => { 
-      const shortDate = s.birthday.split('-').slice(1).join('-'); // 09-03
-      msg += `🎉 ${s.name} (${shortDate})\n`; 
-    });
-  } else {
-    msg += `(None)\n`;
-  }
-
-  msg += `\n🔴 PENDING DESIGNS (Google Sheet) (${pending.length})\n`;
-  if (pending.length > 0) {
-    pending.forEach((s, i) => { 
-      const shortDate = s.birthday.split('-').slice(1).join('-'); // 09-20
-      msg += `${i + 1}. ${s.name} [${shortDate}]\n`; 
-    });
-  } else {
-    msg += `(None! All caught up 🎉)\n`;
-  }
-  
-  if (manuals.length > 0) {
-    msg += `\n➕ MANUAL ADDITIONS (Not in Sheet) (${manuals.length})\n`;
-    manuals.forEach(s => {
-      const shortDate = s.birthday.split('-').slice(1).join('-'); // 09-20
-      msg += `🎉 ${s.name} (${shortDate})\n`; 
-    });
-  }
-  
-  msg += `\n━━━━━━━━━━━━━━━━━━`;
+  const entries = rows => rows.map(s => {
+    const shortDate = formatDate(s.birthday).replace(/ \d{4}$/, '');
+    return `${shortDate}  ›  ${s.name.trim().replace(/\s+/g, ' ')}`;
+  }).join('\n');
+  const msg = card(`📊  ${monthName} birthdays`,
+    `✅ *FLYERS COMPLETED · ${designed.length}*\nGoogle Sheet\n\n${entries(designed) || 'None yet.'}`,
+    `⚠️ *FLYERS NEEDED · ${pending.length}*\nGoogle Sheet\n\n${entries(pending) || 'All caught up! 🎉'}`,
+    `➕ *ADDITIONAL BIRTHDAYS · ${manuals.length}*\nNot in Google Sheet\n\n${entries(manuals) || 'None.'}`,
+    '━━━━━━━━━━━━━━\nView posts waiting to be sent: `/list`'
+  );
   await sendRepMessage(sock, chatId, { text: msg });
 }
 

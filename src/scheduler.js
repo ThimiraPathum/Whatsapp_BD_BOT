@@ -1,6 +1,7 @@
 'use strict';
 
 const { sendRepMessage } = require('./rep-messages');
+const { card, formatDate } = require('./message-layout');
 
 /**
  * scheduler.js — Baileys version
@@ -157,16 +158,25 @@ function startDailyPreview(sock, repGroupId) {
       const tomorrowStr = tomorrow.toLocaleDateString('en-CA', { timeZone: TIMEZONE });
 
       const upcoming = db.getPendingForToday(tomorrowStr);
+      const dispatchTime = `📅 *${formatDate(tomorrowStr)}*\n🕛 12:00 AM · ${TIMEZONE}`;
 
       let msg = '';
       if (upcoming.length === 0) {
-        msg = `╭━━━ 🌙 MIDNIGHT PREVIEW ━━━╮\n\n📅 Tonight's Automatic Dispatch\n\n🕛 12:00 AM\n\n━━━━━━━━━━━━━━━━━━\n\n🎂 Scheduled Birthdays\n\n➖ No birthdays scheduled for tonight.\n\n━━━━━━━━━━━━━━━━━━\n\n⚠️ Please Review\n\nIf you believe a birthday is missing, please contact Piyumal before 12:00 AM.\n\n✅ No automatic birthday posts are currently scheduled.`;
+        msg = card(
+          '🌙 Midnight preview',
+          dispatchTime,
+          '*Ready to send · 0*\nNo birthday posts are scheduled for this midnight.',
+          '*Please review*\nIf a birthday is missing, contact Piyumal before midnight.'
+        );
       } else {
-        msg = `╭━━━ 🌙 MIDNIGHT PREVIEW ━━━╮\n\n📅 Tonight's Automatic Dispatch\n\nThe following birthdays will be sent to the Main Group at:\n\n🕛 12:00 AM\n\n━━━━━━━━━━━━━━━━━━\n\n🎂 Scheduled Birthdays\n\n`;
-        upcoming.forEach((p, i) => { 
-          msg += `${i + 1}. 👤 ${p.name}\n　 🆔 ID: #${p.id}\n\n`; 
-        });
-        msg += `━━━━━━━━━━━━━━━━━━\n\n⚠️ Please Review\n\nIf any birthday is missing or incorrect, please contact Piyumal before 12:00 AM.\n\nThis is an automatic dispatch. No action is required if everything is correct.`;
+        const readyList = upcoming.map(p => `• ${p.name} · #${p.id}`).join('\n');
+        msg = card(
+          '🌙 Midnight preview',
+          dispatchTime,
+          `*Ready to send · ${upcoming.length}*\n${readyList}`,
+          'These posts are scheduled for automatic delivery to the Main Group.',
+          '*Please review*\nIf a birthday is missing or incorrect, contact Piyumal before midnight. Everything correct? No action needed.'
+        );
       }
 
       await sendRepMessage(sock, repGroupId, { text: msg });
@@ -179,11 +189,13 @@ function startDailyPreview(sock, repGroupId) {
         // Add a 2-second delay so WhatsApp doesn't block the second message for being too fast
         await new Promise(resolve => setTimeout(resolve, 2000));
         
-        let warningMsg = `╭━━━ 🚨 EMERGENCY WARNING ━━━╮\n\n⚠️ UNFINISHED DESIGNS DETECTED!\n\nThe following birthdays are TOMORROW, but their flyers have NOT been designed yet:\n\n`;
-        pendingSubmissions.forEach(s => {
-          warningMsg += `• ${s.name}\n`;
-        });
-        warningMsg += `\n🕛 They will NOT be dispatched at midnight unless you design and upload them now!\n━━━━━━━━━━━━━━━━━━`;
+        const missingList = pendingSubmissions.map(s => `• ${s.name}`).join('\n');
+        const warningMsg = card(
+          '🚨 Flyers needed',
+          dispatchTime,
+          `*Still needed · ${pendingSubmissions.length}*\n${missingList}`,
+          '*Action needed*\nDesign and upload these flyers before midnight. They cannot be sent until their flyers are uploaded.'
+        );
         
         await sendRepMessage(sock, repGroupId, { text: warningMsg });
       }

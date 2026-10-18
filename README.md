@@ -39,11 +39,13 @@ To discover group IDs, initially configure nonempty placeholder group IDs and st
 
 ## Commands
 
-Rep Group messages keep their existing layout and instructions, with a short
-English footer with “Yo”, “bro”, “my guy” and “boss” from Elama Bota. Footers rotate at midnight in
+Rep Group messages use bold uppercase headings, short separators, grouped
+birthday details and clear next steps. Monthly reports put dates before names.
+A short English footer marked 💬 uses “Yo”, “bro”, “my guy” and “boss”. Footers rotate at midnight in
 `Asia/Colombo`, repeat after seven days, and use no AI calls. Errors and recovery
 instructions stay plain. Main Group birthday messages are unchanged. Edit the
-footer collections in `src/rep-messages.js` to adjust the jokes.
+footer collections in `src/rep-messages.js` to adjust the jokes. Shared layout
+helpers are in `src/message-layout.js`.
 
 Commands are restricted to the Rep Group, except `/id`. There is no individual member admin-role check.
 

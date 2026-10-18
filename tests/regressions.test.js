@@ -19,6 +19,7 @@ function load(relativePath, dependencies) {
     __dirname: path.dirname(filename),
     require(name) {
       if (name === './rep-messages') return repMessages;
+      if (name === './message-layout') return require('../src/message-layout');
       if (!(name in dependencies)) throw new Error(`Unexpected dependency: ${name}`);
       return dependencies[name];
     },
@@ -92,7 +93,7 @@ test('a form arriving after its flyer is auto-designed; preview warns only for u
     const scheduler = createScheduler(db);
     scheduler.startDailyPreview(sock, 'rep');
     await scheduler.jobs.get('0 21 * * *')();
-    assert.match(sent.at(-1), /UNFINISHED DESIGNS DETECTED/);
+    assert.match(sent.at(-1), /FLYERS NEEDED/);
     assert.match(sent.at(-1), /Unfinished Person/);
     assert.doesNotMatch(sent.at(-1), /Designed Person/);
   } finally { db.getDb().close(); }

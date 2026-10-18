@@ -1,6 +1,7 @@
 'use strict';
 
 const { sendRepMessage } = require('./src/rep-messages');
+const { card, formatDate, postDetails, SEPARATOR } = require('./src/message-layout');
 
 /**
  * index.js — WhatsApp Birthday Bot (Baileys)
@@ -70,7 +71,7 @@ app.post('/api/submit-form', async (req, res) => {
     const submissionMonth = birthday.split('-')[1];
 
     if (submissionMonth === currentMonth && globalSock && process.env.REP_GROUP_ID) {
-      const alertMsg = `╭━━━ 🚨 URGENT: NEW SUBMISSION ━━━╮\n\nA new birthday form was submitted for THIS MONTH!\n\n👤 Name: ${name}\n📅 Date: ${birthday}\n\n🖼️ Photo Link:\n${photoUrl}\n\n━━━━━━━━━━━━━━━━━━\nPlease design and upload the flyer ASAP.`;
+      const alertMsg = card('📥 New birthday form', postDetails(name, birthday), '*This month’s birthday*\nPlease design and upload the flyer as soon as possible.', `📷 *Photo*\n${photoUrl}`);
       await sendRepMessage(globalSock, process.env.REP_GROUP_ID, { text: alertMsg });
     }
 
@@ -93,7 +94,7 @@ process.on('uncaughtException', async (err) => {
   if (globalSock && REP_GROUP_ID) {
     try {
       await sendRepMessage(globalSock, REP_GROUP_ID, {
-        text: `╭━━━ 🚨 CRITICAL ERROR ━━━╮\n\nThe bot has encountered a fatal error and crashed!\n\n⚠️ *Error:*\n${err.message}\n\n━━━━━━━━━━━━━━━━━━\nBot is now restarting...` 
+        text: card('🚨 Critical error', 'The bot encountered a fatal error and is stopping.', `*Error*\n${err.message}`, 'Check the server logs. PM2 will restart the bot if configured to do so.')
       });
     } catch (e) {
       console.error('[Fatal Error] Could not send WhatsApp crash alert:', e.message);
@@ -109,7 +110,7 @@ process.on('unhandledRejection', async (reason, promise) => {
       // Stringify reason to avoid object [Object object]
       const reasonText = reason instanceof Error ? reason.message : String(reason);
       await sendRepMessage(globalSock, REP_GROUP_ID, {
-        text: `╭━━━ 🚨 CRITICAL ERROR ━━━╮\n\nThe bot has encountered an unhandled rejection and crashed!\n\n⚠️ *Reason:*\n${reasonText}\n\n━━━━━━━━━━━━━━━━━━\nBot is now restarting...` 
+        text: card('🚨 Critical error', 'The bot encountered an unhandled error and is stopping.', `*Reason*\n${reasonText}`, 'Check the server logs. PM2 will restart the bot if configured to do so.')
       });
     } catch (e) {
       console.error('[Fatal Error] Could not send WhatsApp crash alert:', e.message);
@@ -227,7 +228,7 @@ async function startBot() {
             if (post && post.image_path && fs.existsSync(post.image_path)) {
               try { fs.unlinkSync(post.image_path); } catch (e) {}
             }
-            const deletedMsg = `╭━━━ 🗑️ POST DELETED ━━━╮\n\nThe birthday post has been removed from the queue.\n\n👤 Name: ${post ? post.name : 'Unknown'}\n🆔 Post ID: #${reactionData.postId}\n\n━━━━━━━━━━━━━━━━━━\n✅ Status: Deleted`;
+            const deletedMsg = card('🗑️ Post cancelled', postDetails(post ? post.name : 'Unknown', post?.birthday, reactionData.postId), 'Removed from the queue. This post will not be sent.');
             
             if (reactionData.originalKey) {
               await sendRepMessage(sock, msg.key.remoteJid, { text: deletedMsg, edit: reactionData.originalKey });
@@ -272,7 +273,7 @@ async function dispatchApprovedPost(sock, postId, repChatId, editKey = null) {
       try { fs.unlinkSync(post.image_path); } catch (e) {}
     }
 
-    const dispatchMsg = `╭━━━ ⚡ DISPATCHED ━━━╮\n\n🎉 Birthday sent successfully to the Main Group.\n\n👤 Name: ${post.name}\n🆔 Post ID: #${postId}\n\n━━━━━━━━━━━━━━━━━━\n✅ Status: Dispatched Immediately`;
+    const dispatchMsg = card('✅ Birthday sent', postDetails(post.name, post.birthday, postId), 'Delivered to the Main Group.');
     if (editKey) {
       await sendRepMessage(sock, repChatId, { text: dispatchMsg, edit: editKey });
     } else {
@@ -280,10 +281,11 @@ async function dispatchApprovedPost(sock, postId, repChatId, editKey = null) {
     }
   } catch (err) {
     console.error('[Bot] Poll dispatch failed:', err);
+    const failureMsg = card('⚠️ Dispatch failed', `🆔 Post #${postId}`, 'The immediate send could not be completed. Check the post status and connection before retrying.', 'View pending posts: `/list`');
     if (editKey) {
-      await sendRepMessage(sock, repChatId, { text: `⚠️ Saved to DB (ID: #${postId}) but immediate dispatch failed. Will retry at midnight.`, edit: editKey });
+      await sendRepMessage(sock, repChatId, { text: failureMsg, edit: editKey });
     } else {
-      await sendRepMessage(sock, repChatId, { text: `⚠️ Saved to DB (ID: #${postId}) but immediate dispatch failed. Will retry at midnight.` });
+      await sendRepMessage(sock, repChatId, { text: failureMsg });
     }
   }
 }
@@ -306,7 +308,7 @@ async function handleIncomingMessage(msg) {
     '';
 
   if (body.trim() === '/id') {
-    await sendRepMessage(sock, chatId, { text: `📌 *Group ID:*\n${chatId}` }, { quoted: msg });
+    await sendRepMessage(sock, chatId, { text: card('📌 Chat ID', chatId) }, { quoted: msg });
     return;
   }
 
@@ -323,7 +325,7 @@ async function handleIncomingMessage(msg) {
 
   // 2. ෆොටෝ එකක් නැතුව නිකම්ම /add ගැහුවොත් බ්ලොක් කිරීම
   if (trimmed.startsWith('/add') && !hasImage) {
-    const flyerMissingMsg = `╭━━━ 📸 FLYER REQUIRED ━━━╮\n\nA birthday flyer/photo is required to create a birthday post.\n\nPlease upload the flyer and use this caption:\n\n/add [Name] | [Date]\n\n💡 Example:\n/add Kasun | 2026-09-18\n\n━━━━━━━━━━━━━━━━━━\n❌ Text-only birthday posts are not accepted.`;
+    const flyerMissingMsg = card('📸 Flyer required', 'Attach the flyer image and add the name and birthday in its caption.', '*Caption example*\n`/add Kasun Perera | 2026-10-20`', 'Replace the example name and date. Text-only posts cannot be scheduled.');
     await sendRepMessage(sock, chatId, { text: flyerMissingMsg }, { quoted: msg });
     return;
   }
@@ -333,7 +335,7 @@ async function handleIncomingMessage(msg) {
 
   // 4. Bot Pause කරලා තියෙනවද කියලා බලනවා
   if (db.isBotPaused()) {
-    await sendRepMessage(sock, chatId, { text: '⚠️ *Bot is currently PAUSED.*\n\nFlyers are not being accepted right now. Type `/resume` to turn the bot back on.' }, { quoted: msg });
+    await sendRepMessage(sock, chatId, { text: card('⏸️ Bot is currently paused', 'This flyer has not been scheduled.', '*Next step*\nUse `/resume`, then upload the flyer again.') }, { quoted: msg });
     return;
   }
 
@@ -349,7 +351,7 @@ async function handleIncomingMessage(msg) {
     const content = trimmed.replace('/add', '').trim();
     const parts = content.split('|').map((p) => p.trim());
     if (parts.length < 2) {
-      const invalidFormatMsg = `╭━━━ ⚠️ INVALID FORMAT ━━━╮\n\nThe AI could not extract the birthday details from this flyer.\n\n📸 Please re-upload the flyer.\n\nIf the problem continues, add the following as the caption:\n\n/add [Name] | [Date]\n\n💡 Example:\n/add Kasun | 2026-09-18\n\n━━━━━━━━━━━━━━━━━━\n🔄 Please try again.`;
+      const invalidFormatMsg = card('⚠️ Invalid caption format', 'Upload the flyer again with the name and date separated by `|`.', '*Caption example*\n`/add Kasun Perera | 2026-10-20`', 'Replace the example name and date. Use YYYY-MM-DD for the date.');
       await sendRepMessage(sock, chatId, { text: invalidFormatMsg }, { quoted: msg });
       return;
     }
@@ -362,9 +364,9 @@ async function handleIncomingMessage(msg) {
   // Loading Message
   let loadingMsg;
   if (!isManualAdd) {
-    loadingMsg = await sendRepMessage(sock, chatId, { text: '🔍 Analysing flyer with AI… please wait.' }, { quoted: msg });
+    loadingMsg = await sendRepMessage(sock, chatId, { text: card('🔍 Analysing flyer', 'Reading the name and birthday date…') }, { quoted: msg });
   } else {
-    loadingMsg = await sendRepMessage(sock, chatId, { text: '⚙️ Processing manual entry with Flyer...' }, { quoted: msg });
+    loadingMsg = await sendRepMessage(sock, chatId, { text: card('⚙️ Processing manual entry', 'Saving your flyer and caption details…') }, { quoted: msg });
   }
 
   // Helper to Edit Loading Message (Prevents "Message Deleted" tombstones)
@@ -393,7 +395,7 @@ async function handleIncomingMessage(msg) {
     console.log(`[Bot] ✅ Image downloaded to: ${imagePath}`);
   } catch (err) {
     console.error('[Bot] Download failed:', err.message);
-    await editLoading('❌ Could not download the image. Please try again.');
+    await editLoading(card('⚠️ Could not download image', 'The birthday has not been scheduled.', '*Next step*\nUpload the image again.'));
     return;
   }
 
@@ -404,14 +406,14 @@ async function handleIncomingMessage(msg) {
     try { await sock.sendPresenceUpdate('paused', chatId); } catch (e) {}
     if (!details || (details.status && details.status !== 'OK' && details.status !== 'IGNORE')) {
       if (fs.existsSync(imagePath)) fs.unlinkSync(imagePath);
-      const aiFailedMsg = `╭━━━ ⚠️ FLYER NOT READ ━━━╮\n\nThe AI could not extract the birthday details from this flyer.\n\n📸 Please re-upload the flyer.\n\nIf the problem continues, add the following as the caption:\n\n/add [Name] | [Date]\n\n💡 Example:\n/add Kasun | 2026-09-18\n\n━━━━━━━━━━━━━━━━━━\n🔄 Please try again.`;
+      const aiFailedMsg = card('⚠️ Could not read flyer', 'The name or birthday date could not be read. Nothing has been scheduled.', '*Next step*\nUpload the flyer again with this caption:', '`/add Kasun Perera | 2026-10-20`\nReplace the example with the correct name and date.');
       await editLoading(aiFailedMsg);
       return;
     }
     
     if (details.status === 'IGNORE') {
       if (fs.existsSync(imagePath)) fs.unlinkSync(imagePath);
-      await editLoading('📷 Ignored: Raw Photo Detected');
+      await editLoading(card('📷 Raw photo detected', 'This looks like a regular photo. No birthday post was scheduled.', 'Upload the completed birthday flyer when it is ready.'));
       return;
     }
 
@@ -422,7 +424,7 @@ async function handleIncomingMessage(msg) {
   // Duplicate Check
   if (db.postExists({ name, birthday })) {
     if (fs.existsSync(imagePath)) fs.unlinkSync(imagePath);
-    const duplicateMsg = `╭━━━ ⚠️ DUPLICATE DETECTED ━━━╮\n\nA birthday with the same details already exists in the queue.\n\n👤 Name: ${name}\n📅 Date: ${birthday}\n\n━━━━━━━━━━━━━━━━━━\n🚫 No new post was created.\n\nThe existing birthday remains in the queue.`;
+    const duplicateMsg = card('👀 Already scheduled', postDetails(name, birthday), 'A matching birthday is already in the queue. No duplicate was added.', 'View the queue: `/list`');
     await editLoading(duplicateMsg);
     return;
   }
@@ -441,17 +443,22 @@ async function handleIncomingMessage(msg) {
 
   if (birthday === today) {
     try {
-      const urgentMsg = `╭━━━ 🚨 BIRTHDAY TODAY ━━━╮\n\n👤 Name: ${name}\n🆔 Post ID: #${id}\n\n🎂 This birthday is scheduled for TODAY.\n\n━━━━━━━━━━━━━━━━━━\n\n❓ Dispatch this birthday to the Main Group now?\n\n👍 Approve & Send Immediately\n❌ Delete This Post\n\n━━━━━━━━━━━━━━━━━━\n\n⚠️ React to this message with your choice.\nThe post will not be dispatched until it is approved.`;
+      const urgentMsg = card('🎂 Birthday today', postDetails(name, birthday, id), '*Send to the Main Group now?*\n👍 Send now\n❌ Cancel this post', 'React to this message to choose. Approval is needed for immediate sending.');
       
       await editLoading(urgentMsg);
       reactionCache.set(loadingMsg.key.id, { postId: id, originalKey: loadingMsg.key });
     } catch (err) {
       console.error('[Bot] Failed to send reaction message:', err);
-      await editLoading(`⚠️ Saved to DB (ID: ${id}) but could not send the Poll.`);
+      await editLoading(card('⚠️ Could not request approval', `The birthday was saved as post #${id}.`, 'Check `/list` before uploading again.'));
     }
   } else {
     // අනාගත උපන්දිනයක් නම් ෂෙඩියුල් කිරීම
-    const futureMsg = `╭━━━ 🎂 BIRTHDAY SCHEDULED ━━━╮\n\n👤 Name: ${name}\n📅 Date: ${birthday}\n🆔 Post ID: #${id}\n\n━━━━━━━━━━━━━━━━━━\n\n🕛 Automatic Dispatch\nScheduled for 12:00 AM on ${birthday}.\n\n✅ Status: Added to the birthday queue`;
+    const futureMsg = card('🎂 Birthday confirmed',
+      `*${name.trim()}* ✨`,
+      `📅  ${formatDate(birthday, 'long')}\n🕛  12:00 AM · ${TIMEZONE === 'Asia/Colombo' ? 'Sri Lanka' : TIMEZONE}\n📍  Main Group`,
+      '✅ Saved and ready for automatic sending.',
+      `${SEPARATOR}\nPOST #${id}  •  Cancel: \`/cancel ${id}\``
+    );
     await editLoading(futureMsg);
   }
 }

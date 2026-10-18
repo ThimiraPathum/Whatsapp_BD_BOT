@@ -1,6 +1,6 @@
 'use strict';
 
-// Only the small footer changes. Operational text and message options stay intact.
+// Daily footers sit below the message; operational details stay in the main body.
 const lines = {
   scheduled: [
     'Yo, boss! Midnight shift is mine 😎',
@@ -78,16 +78,17 @@ const lines = {
 
 function withDailyFun(text, now = new Date()) {
   if (typeof text !== 'string') return text;
+  const heading = text.split(/\r?\n/, 1)[0].replace(/\*/g, '');
   // Keep errors, recovery instructions and destructive-operation notices sober.
-  if (/CRITICAL ERROR|could not|couldn.t|failed|not ready|INVALID|not provided|FLYER NOT READ|FLYER REQUIRED|wiped|currently PAUSED/i.test(text)) return text;
+  if (/CRITICAL ERROR|could not|couldn.t|failed|not ready|not found|INVALID|not provided|FLYER NOT READ|FLYER REQUIRED|wiped|cleared|currently PAUSED/i.test(heading)) return text;
   let category = 'general';
-  if (/BIRTHDAY SCHEDULED/.test(text)) category = 'scheduled';
-  else if (/DUPLICATE DETECTED/.test(text)) category = 'duplicate';
-  else if (/Analysing flyer|Processing manual entry/.test(text)) category = 'reading';
-  else if (/Raw Photo Detected/.test(text)) category = 'photo';
-  else if (/UNFINISHED DESIGNS DETECTED|URGENT: NEW SUBMISSION/.test(text)) category = 'missing';
-  else if (/BOT PAUSED/.test(text)) category = 'paused';
-  else if (/BOT RESUMED/.test(text)) category = 'resumed';
+  if (/BIRTHDAY SCHEDULED|BIRTHDAY CONFIRMED/i.test(heading)) category = 'scheduled';
+  else if (/DUPLICATE DETECTED|Already scheduled/i.test(heading)) category = 'duplicate';
+  else if (/Analysing flyer|Processing manual entry/i.test(heading)) category = 'reading';
+  else if (/Raw Photo Detected/i.test(heading)) category = 'photo';
+  else if (/UNFINISHED DESIGNS DETECTED|EMERGENCY WARNING|URGENT: NEW SUBMISSION|Flyers needed|New birthday form/i.test(heading)) category = 'missing';
+  else if (/BOT PAUSED/i.test(heading)) category = 'paused';
+  else if (/BOT RESUMED/i.test(heading)) category = 'resumed';
 
   const dateParts = new Intl.DateTimeFormat('en-US', {
     timeZone: 'Asia/Colombo', year: 'numeric', month: 'numeric', day: 'numeric',
@@ -95,7 +96,7 @@ function withDailyFun(text, now = new Date()) {
   const part = type => Number(dateParts.find(p => p.type === type).value);
   const day = Math.floor(Date.UTC(part('year'), part('month') - 1, part('day')) / 86400000);
   const choices = lines[category];
-  return `${text}\n\n${choices[((day % choices.length) + choices.length) % choices.length]}`;
+  return `${text}\n\n💬 ${choices[((day % choices.length) + choices.length) % choices.length]}`;
 }
 
 function sendRepMessage(sock, chatId, content, options) {

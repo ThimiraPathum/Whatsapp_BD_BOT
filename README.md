@@ -10,7 +10,7 @@ Birthday flyer scheduling for University of Colombo, Faculty of Technology, 22/2
 4. At 9 PM, the Rep Group receives tomorrow's preview and a warning for unfinished form designs.
 5. At midnight, the bot sends that date's pending posts to the Main Group, marks successful posts completed and deletes their images.
 
-Schedules use `TIMEZONE`, defaulting to `Asia/Colombo`. The bot must be running and connected at dispatch time. Failed posts are marked failed; there is no automatic failed-post retry job.
+Schedules use `TIMEZONE`, defaulting to `Asia/Colombo`. One scheduler manager uses the currently connected socket. A 30-second check recovers missed work within bounded local-time windows: birthdays until 02:00 and evening previews until midnight by default. Uncertain send outcomes require administrator review and are never blindly retried. See [production repair and deployment guide](PRODUCTION_FIX.md).
 
 For a flyer dated today, react to the bot's prompt with 👍 to send immediately or ❌ to cancel. Reaction prompts are held in memory and do not survive a restart.
 

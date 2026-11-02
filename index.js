@@ -9,6 +9,7 @@ const { card, formatDate, postDetails, SEPARATOR } = require('./src/message-layo
  */
 
 require('dotenv').config();
+require('./src/safe-logging').protectSessionLogs();
 
 const {
   default: makeWASocket,
@@ -24,7 +25,8 @@ const path = require('path');
 const pino = require('pino');
 
 const db = require('./src/database');
-const { startScheduler, startDailyPreview } = require('./src/scheduler'); 
+const { createManager } = require('./src/reliability');
+const { createConnectionManager } = require('./src/connection-manager');
 const { handleCommand } = require('./src/commands');
 const { extractBirthdayDetails } = require('./src/vision');
 
@@ -70,9 +72,9 @@ app.post('/api/submit-form', async (req, res) => {
     const currentMonth = new Date().toISOString().split('-')[1]; // '09'
     const submissionMonth = birthday.split('-')[1];
 
-    if (submissionMonth === currentMonth && globalSock && process.env.REP_GROUP_ID) {
+    if (submissionMonth === currentMonth && connection.getSocket() && process.env.REP_GROUP_ID) {
       const alertMsg = card('📥 New birthday form', postDetails(name, birthday), '*This month’s birthday*\nPlease design and upload the flyer as soon as possible.', `📷 *Photo*\n${photoUrl}`);
-      await sendRepMessage(globalSock, process.env.REP_GROUP_ID, { text: alertMsg });
+      await sendRepMessage(connection.getSocket(), process.env.REP_GROUP_ID, { text: alertMsg });
     }
 
     res.json({ success: true });
@@ -90,7 +92,7 @@ app.listen(PORT, () => {
 let globalSock = null; // Used to send crash messages
 
 process.on('uncaughtException', async (err) => {
-  console.error('[Fatal Error] Uncaught Exception:', err);
+  console.error('[Fatal Error] Uncaught exception; process will exit');
   if (globalSock && REP_GROUP_ID) {
     try {
       await sendRepMessage(globalSock, REP_GROUP_ID, {
@@ -104,7 +106,7 @@ process.on('uncaughtException', async (err) => {
 });
 
 process.on('unhandledRejection', async (reason, promise) => {
-  console.error('[Fatal Error] Unhandled Rejection at:', promise, 'reason:', reason);
+  console.error('[Fatal Error] Unhandled rejection; process will exit');
   if (globalSock && REP_GROUP_ID) {
     try {
       // Stringify reason to avoid object [Object object]
@@ -162,53 +164,22 @@ function buildCaption(name, birthday) {
 
 let sock;
 
-async function startBot() {
-  const { state, saveCreds } = await useMultiFileAuthState('.baileys_auth');
-
-  sock = makeWASocket({
-    auth: state,
-    printQRInTerminal: false,
-    logger: pino({ level: 'silent' }),
-  });
-  globalSock = sock;
-
-  sock.ev.on('creds.update', saveCreds);
-
-  sock.ev.on('connection.update', (update) => {
-    const { connection, lastDisconnect, qr } = update;
-
-    if (qr) {
-      console.log('\n📱 Scan this QR code with WhatsApp:\n');
-      qrcode.generate(qr, { small: true });
-    }
-
-    if (connection === 'close') {
-      const shouldReconnect =
-        new Boom(lastDisconnect?.error)?.output?.statusCode !== DisconnectReason.loggedOut;
-      console.warn('⚠️  Connection closed. Reconnecting:', shouldReconnect);
-      if (shouldReconnect) startBot();
-      else console.error('❌ Logged out. Delete .baileys_auth and re-scan.');
-    } else if (connection === 'open') {
-      console.log('✅ WhatsApp client connected & ready!\n');
-      console.log(`   Rep Group  : ${REP_GROUP_ID}`);
-      console.log(`   Main Group : ${MAIN_GROUP_ID}\n`);
-
-      try {
-        const scheduler = startScheduler(sock, MAIN_GROUP_ID);
-        global.__dispatchNow = scheduler.dispatchTodaysPosts;
-        startDailyPreview(sock, REP_GROUP_ID);
-      } catch (err) {
-        console.error('[Scheduler] Error starting scheduler/preview:', err);
-      }
-    }
-  });
-
-  sock.ev.on('messages.upsert', async ({ messages, type }) => {
+const connection = createConnectionManager({
+  loggedOutCode: DisconnectReason.loggedOut,
+  createSocket: async () => {
+    const { state, saveCreds } = await useMultiFileAuthState('.baileys_auth');
+    return { socket: makeWASocket({ auth: state, printQRInTerminal: false, logger: pino({ level: 'silent' }) }), saveCreds };
+  },
+  onUpdate: ({ qr }) => { if (qr) qrcode.generate(qr, { small: true }); },
+  onReady: async (activeSocket) => { sock = activeSocket; globalSock = activeSocket; await schedulerManager.check(); },
+  onMessage: async (activeSocket, { messages, type }) => {
+    sock = activeSocket;
     if (type !== 'notify') return;
 
     for (const msg of messages) {
       // Handle emoji reactions for urgent dispatches
       if (msg.message?.reactionMessage) {
+        if (msg.key.remoteJid !== REP_GROUP_ID || msg.key.fromMe) continue;
         const reaction = msg.message.reactionMessage;
         const reactedMsgId = reaction.key.id;
         const emoji = reaction.text;
@@ -224,7 +195,7 @@ async function startBot() {
             reactionCache.delete(reactedMsgId);
             
             const post = db.getPostById(reactionData.postId);
-            db.cancelPost(reactionData.postId);
+            if (!db.cancelPost(reactionData.postId)) continue;
             if (post && post.image_path && fs.existsSync(post.image_path)) {
               try { fs.unlinkSync(post.image_path); } catch (e) {}
             }
@@ -246,13 +217,27 @@ async function startBot() {
         console.error('[Bot] Unhandled error in message handler:', err);
       }
     }
-  });
-
-  // Remove the old messages.update listener entirely
-  sock.ev.on('messages.update', async (events) => {
-    // Left intentionally blank as we no longer use polls
-  });
-}
+  },
+});
+const schedulerManager = createManager({ db, getSocket: connection.getSocket,
+  mainGroupId: MAIN_GROUP_ID, repGroupId: REP_GROUP_ID, timezone: TIMEZONE,
+  adminAlertJid: process.env.ADMIN_ALERT_JID?.trim(),
+  updateNoticeAt: process.env.UPDATE_NOTICE_AT?.trim(),
+  dispatchWindowMinutes: Number(process.env.DISPATCH_RECOVERY_MINUTES || 120),
+  previewWindowMinutes: Number(process.env.PREVIEW_RECOVERY_MINUTES || 180) });
+global.__dispatchNow = schedulerManager.dispatchTodaysPosts;
+async function startBot() { schedulerManager.start(); await connection.start(); }
+for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, async () => {
+  schedulerManager.stop(); connection.stop();
+  await Promise.race([schedulerManager.drain(), new Promise(resolve => setTimeout(resolve, 5000))]);
+  process.exit(0);
+});
+// Health details require a secret bearer token; never expose session information.
+app.get('/health', (req, res) => {
+  const token = process.env.HEALTH_TOKEN;
+  if (!token || req.headers.authorization !== 'Bearer ' + token) return res.sendStatus(401);
+  res.json(schedulerManager.health());
+});
 
 // ─── Dispatch helper for Polls ────────────────────────────────────────────────
 
@@ -261,17 +246,7 @@ async function dispatchApprovedPost(sock, postId, repChatId, editKey = null) {
   if (!post || post.status !== 'pending') return;
 
   try {
-    const caption = buildCaption(post.name, post.birthday);
-    await sock.sendMessage(MAIN_GROUP_ID, {
-      image: fs.readFileSync(post.image_path),
-      caption,
-    });
-
-    db.markCompleted(postId);
-
-    if (fs.existsSync(post.image_path)) {
-      try { fs.unlinkSync(post.image_path); } catch (e) {}
-    }
+    if (!await schedulerManager.sendPost(postId)) throw new Error('Delivery needs review or is paused');
 
     const dispatchMsg = card('✅ Birthday sent', postDetails(post.name, post.birthday, postId), 'Delivered to the Main Group.');
     if (editKey) {

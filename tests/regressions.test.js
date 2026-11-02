@@ -43,15 +43,80 @@ function createDb(connection) {
 function createScheduler(db) {
   const jobs = new Map();
   const scheduler = load('src/scheduler.js', {
-    './database': db,
-    fs: { existsSync: () => false },
-    'node-cron': { schedule(expression, callback) {
-      jobs.set(expression, callback);
-      return { start() {} };
-    } },
+    './database': db, fs: { existsSync: () => false },
   });
-  return { ...scheduler, jobs };
+  const { createManager } = load('src/reliability.js', {
+    './scheduler': scheduler, 'node-cron': {}, fs: { existsSync: () => false },
+  });
+  return { jobs,
+    startScheduler(sock, mainGroupId) {
+      const manager = createManager({ db, getSocket: () => sock, mainGroupId, repGroupId: 'rep',
+        timers: { setTimeout() { return {}; }, clearTimeout() {} }, scheduler: {}, clock: () => new Date() });
+      jobs.set('0 0 * * *', () => manager.dispatchTodaysPosts());
+      return manager;
+    },
+    startDailyPreview(sock, repGroupId) { jobs.set('0 21 * * *', () => scheduler.sendDailyPreview(sock, repGroupId)); }
+  };
 }
+
+test('application routing preserves Rep commands, upload approval, reaction permissions and private health', async () => {
+  const db = createDb();
+  const sent = [], routes = new Map(), approved = [], dispatched = [];
+  let callbacks;
+  const socket = { readMessages: async () => {}, sendMessage: async (chat, content) => {
+    const result = { key: { id: `app-${sent.length}` } };
+    sent.push({ chat, content, result }); return result;
+  } };
+  const app = { use() {}, get(route, fn) { routes.set(route, fn); }, post() {}, listen() {} };
+  const express = Object.assign(() => app, { json: () => () => {} });
+  const manager = { start() {}, check: async () => {}, health: () => ({ activeJobs: 3 }),
+    dispatchTodaysPosts: async date => { dispatched.push(date); return 0; },
+    sendPost: async id => { approved.push(id); db.markCompleted(id); return true; } };
+  const deps = {
+    './src/rep-messages': repMessages, './src/message-layout': require('../src/message-layout'),
+    dotenv: { config() {} }, './src/safe-logging': { protectSessionLogs() {} },
+    '@whiskeysockets/baileys': { DisconnectReason: { loggedOut: 401 }, downloadMediaMessage: async () => Buffer.from('fake') },
+    '@hapi/boom': {}, 'qrcode-terminal': {}, fs: { existsSync: () => true, writeFileSync() {} }, path,
+    pino: () => ({}), './src/database': db, './src/reliability': { createManager: () => manager },
+    './src/connection-manager': { createConnectionManager: options => {
+      callbacks = options; return { getSocket: () => socket, start: () => options.onReady(socket) };
+    } },
+    './src/commands': load('src/commands.js', { './database': db, fs: {} }),
+    './src/vision': {}, express
+  };
+  try {
+    vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../index.js'), 'utf8'), {
+      module: { exports: {} }, __dirname: path.resolve(__dirname, '..'), Buffer, Date, global: {},
+      require: name => { if (!(name in deps)) throw Error(`Unexpected application dependency ${name}`); return deps[name]; },
+      process: { env: { GROQ_API_KEY: 'test', REP_GROUP_ID: 'rep', MAIN_GROUP_ID: 'main', TIMEZONE: 'Asia/Colombo', HEALTH_TOKEN: 'test-token' }, on() {}, once() {}, exit() { throw Error('Unexpected exit'); } },
+      console: { log() {}, error() {}, warn() {} }, setTimeout
+    });
+    const message = (chat, text, extra = {}, fromMe = false) => callbacks.onMessage(socket, { type: 'notify', messages: [{
+      key: { remoteJid: chat, fromMe, id: 'incoming' }, message: { conversation: text, ...extra }
+    }] });
+    for (const chat of ['main', 'stranger']) await message(chat, '/pause');
+    await message('rep', '/pause', {}, true);
+    assert.equal(Boolean(db.isBotPaused()), false); assert.equal(sent.length, 0);
+    await message('rep', '/pause'); assert.equal(db.isBotPaused(), true);
+    await message('rep', '/resume'); assert.equal(db.isBotPaused(), false);
+    for (const command of ['/help', '/list', '/status', '/tonight']) {
+      const before = sent.length; await message('rep', command); assert.ok(sent.length > before, command);
+    }
+    await message('rep', '/dispatch'); assert.equal(dispatched.length, 1);
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Colombo' });
+    await message('rep', `/add Test Person | ${today}`, { imageMessage: {} });
+    const loading = sent.find(s => /Processing manual entry/i.test(s.content.text));
+    const reaction = { reactionMessage: { key: loading.result.key, text: '👍' } };
+    await message('main', '', reaction); await message('stranger', '', reaction);
+    await message('rep', '', reaction, true); assert.equal(approved.length, 0);
+    await message('rep', '', reaction); assert.equal(approved.length, 1);
+    await message('rep', '', reaction); assert.equal(approved.length, 1);
+    let status, body;
+    const response = { sendStatus: code => { status = code; }, json: value => { body = value; } };
+    routes.get('/health')({ headers: {} }, response); assert.equal(status, 401); assert.equal(body, undefined);
+    routes.get('/health')({ headers: { authorization: 'Bearer test-token' } }, response); assert.equal(body.activeJobs, 3);
+  } finally { db.getDb().close(); }
+});
 
 test('manual /dispatch sends the same date shown by /tonight; cron still sends today', async () => {
   const db = createDb();

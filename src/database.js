@@ -235,6 +235,11 @@ function listPending() {
  * Delete a pending post by id (for the /cancel admin command).
  */
 function cancelPost(id) {
+  const hasLedger = getDb().prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='delivery_runs'").get();
+  if (hasLedger) {
+    const delivery = getDb().prepare('SELECT state FROM delivery_runs WHERE key=?').get(`post:${id}`);
+    if (delivery && ['in_progress', 'ambiguous', 'completed'].includes(delivery.state)) return 0;
+  }
   return getDb()
     .prepare(
       `DELETE FROM birthday_posts WHERE id = ? AND status = 'pending'`
@@ -254,18 +259,21 @@ function getPostById(id) {
 /**
  * Backup the database file (keeps the last 7 days of backups).
  */
-function backupDatabase() {
+async function backupDatabase() {
   try {
     const backupDir = path.join(__dirname, '..', 'data', 'backups');
     if (!fs.existsSync(backupDir)) {
       fs.mkdirSync(backupDir, { recursive: true });
     }
 
-    const dateStr = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-    const backupPath = path.join(backupDir, `birthdays_${dateStr}.db`);
+    const dateStr = new Date().toLocaleDateString('en-CA', { timeZone: process.env.TIMEZONE || 'Asia/Colombo' });
+    const backupPath = path.join(backupDir, `birthdays_${dateStr}_${Date.now()}.db`);
 
     // Copy the database file
-    fs.copyFileSync(DB_PATH, backupPath);
+    if (fs.existsSync(backupPath)) return backupPath;
+    const temporary = backupPath + '.tmp';
+    await getDb().backup(temporary);
+    fs.renameSync(temporary, backupPath);
     console.log(`[Database] Backup created at: ${backupPath}`);
 
     // Delete backups older than 7 days
@@ -275,6 +283,7 @@ function backupDatabase() {
 
     files.forEach(file => {
       const filePath = path.join(backupDir, file);
+      if (!/^birthdays_\d{4}-\d{2}-\d{2}(?:_\d+)?\.db$/.test(file)) return;
       const stats = fs.statSync(filePath);
       if (now - stats.mtimeMs > SEVEN_DAYS) {
         fs.unlinkSync(filePath);
@@ -282,7 +291,8 @@ function backupDatabase() {
       }
     });
   } catch (err) {
-    console.error(`[Database] Backup failed:`, err);
+    console.error('[Database] Backup failed');
+    throw err;
   }
 }
 

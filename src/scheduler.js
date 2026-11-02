@@ -68,24 +68,25 @@ async function sendDailyPreview(sock, repGroupId) {
       const tomorrowStr = tomorrow.toLocaleDateString('en-CA', { timeZone: TIMEZONE });
 
       const upcoming = db.getPendingForToday(tomorrowStr);
-      const dispatchTime = `📅 *${formatDate(tomorrowStr)}*\n🕛 12:00 AM · ${TIMEZONE}`;
+      const dispatchTime = `📅 *${formatDate(tomorrowStr)}* · 12:00 AM`;
+      const destination = `📍 Main Group · ${TIMEZONE === 'Asia/Colombo' ? 'ශ්‍රී ලංකා වේලාවෙන්' : TIMEZONE}`;
 
       let msg = '';
       if (upcoming.length === 0) {
         msg = card(
-          '🌙 Midnight preview',
-          dispatchTime,
-          '*Ready to send · 0*\nNo birthday posts are scheduled for this midnight.',
-          '*Please review*\nIf a birthday is missing, contact Piyumal before midnight.'
+          '🌙 රාත්‍රී 12:00 පෙරදැකීම (Preview)',
+          `${dispatchTime}\n${destination}`,
+          '*යැවීමට සූදානම් · 0*\nඅද රාත්‍රී 12:00 ට යැවීමට පෝස්ටු ඇතුළත් කර නැත.',
+          '*කරුණාකර පරීක්ෂා කරන්න*\nකිසියම් උපන්දිනයක් මඟහැරී ඇත්නම්, රාත්‍රී 12:00 ට පෙර Piyumal දැනුවත් කරන්න.'
         );
       } else {
         const readyList = upcoming.map(p => `• ${p.name} · #${p.id}`).join('\n');
         msg = card(
-          '🌙 Midnight preview',
-          dispatchTime,
-          `*Ready to send · ${upcoming.length}*\n${readyList}`,
-          'These posts are scheduled for automatic delivery to the Main Group.',
-          '*Please review*\nIf a birthday is missing or incorrect, contact Piyumal before midnight. Everything correct? No action needed.'
+          '🌙 රාත්‍රී 12:00 පෙරදැකීම (Preview)',
+          `${dispatchTime}\n${destination}`,
+          `*යැවීමට සූදානම් · ${upcoming.length}*\n${readyList}`,
+          'මෙම පෝස්ටු අද රාත්‍රී 12:00 ට ස්වයංක්‍රීයව Main Group එකට යැවේ.',
+          '*කරුණාකර පරීක්ෂා කරන්න*\nකිසියම් උපන්දිනයක් මඟහැරී ඇත්නම් හෝ වෙනසක් විය යුතු නම්, රාත්‍රී 12:00 ට පෙර Piyumal දැනුවත් කරන්න. සියල්ල නිවැරදි නම් කිසිවක් කිරීමට අවශ්‍ය නැත.'
         );
       }
 
@@ -101,10 +102,10 @@ async function sendDailyPreview(sock, repGroupId) {
         
         const missingList = pendingSubmissions.map(s => `• ${s.name}`).join('\n');
         const warningMsg = card(
-          '🚨 Flyers needed',
+          '🚨 අවශ්‍ය කරන ෆ්ලයර් (Flyers Needed)',
           dispatchTime,
-          `*Still needed · ${pendingSubmissions.length}*\n${missingList}`,
-          '*Action needed*\nDesign and upload these flyers before midnight. They cannot be sent until their flyers are uploaded.'
+          `*තවමත් ලැබී නැති · ${pendingSubmissions.length}*\n${missingList}`,
+          '*කළ යුතු දේ*\nරාත්‍රී 12:00 ට පෙර මෙම ෆ්ලයර් නිර්මාණය කර upload කරන්න. ෆ්ලයර් එක upload කරන තෙක් පෝස්ටුව යැවිය නොහැක.'
         );
         
         await sendRepMessage(sock, repGroupId, { text: warningMsg });

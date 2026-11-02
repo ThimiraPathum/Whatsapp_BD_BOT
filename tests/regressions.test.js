@@ -105,7 +105,7 @@ test('application routing preserves Rep commands, upload approval, reaction perm
     await message('rep', '/dispatch'); assert.equal(dispatched.length, 1);
     const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Colombo' });
     await message('rep', `/add Test Person | ${today}`, { imageMessage: {} });
-    const loading = sent.find(s => /Processing manual entry/i.test(s.content.text));
+    const loading = sent.find(s => /පෝස්ටුව ඇතුළත් කරමින් පවතී/.test(s.content.text));
     const reaction = { reactionMessage: { key: loading.result.key, text: '👍' } };
     await message('main', '', reaction); await message('stranger', '', reaction);
     await message('rep', '', reaction, true); assert.equal(approved.length, 0);
@@ -158,7 +158,7 @@ test('a form arriving after its flyer is auto-designed; preview warns only for u
     const scheduler = createScheduler(db);
     scheduler.startDailyPreview(sock, 'rep');
     await scheduler.jobs.get('0 21 * * *')();
-    assert.match(sent.at(-1), /FLYERS NEEDED/);
+    assert.match(sent.at(-1), /අවශ්‍ය කරන ෆ්ලයර්/);
     assert.match(sent.at(-1), /Unfinished Person/);
     assert.doesNotMatch(sent.at(-1), /Designed Person/);
   } finally { db.getDb().close(); }

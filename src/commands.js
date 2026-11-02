@@ -1,12 +1,12 @@
 'use strict';
 
 const { sendRepMessage } = require('./rep-messages');
-const { card, formatDate, postDetails } = require('./message-layout');
+const { card, formatDate, postDetails, SEPARATOR } = require('./message-layout');
 
 const db = require('./database');
 const fs = require('fs');
 const TIMEZONE = process.env.TIMEZONE || 'Asia/Colombo';
-const TIMEZONE_LABEL = TIMEZONE === 'Asia/Colombo' ? 'Sri Lanka time' : TIMEZONE;
+const TIMEZONE_LABEL = TIMEZONE === 'Asia/Colombo' ? 'ශ්‍රී ලංකා වේලාවෙන්' : TIMEZONE;
 
 /**
  * Handle custom commands in the Rep Group
@@ -33,7 +33,7 @@ async function handleCommand(sock, chatId, text, dispatchNowFunction) {
     case '/cancel':
     case '/delete':
       if (parts.length < 2) {
-        await sendRepMessage(sock, chatId, { text: card('⚠️ Post ID not provided', 'Choose a post with `/list`, then use its ID.', '*Example*\n`/cancel 18`') });
+        await sendRepMessage(sock, chatId, { text: card('⚠️ පෝස්ට් අංකය සඳහන් කර නැත', '`/list` මඟින් පෝස්ටුව තෝරා එහි අංකය යොදන්න.', '*උදාහරණය*\n`/cancel 18`') });
         return;
       }
       await cancelPost(sock, chatId, parts[1]);
@@ -51,48 +51,48 @@ async function handleCommand(sock, chatId, text, dispatchNowFunction) {
 
     case '/dispatch':
       {
-        const msgKey = await sendRepMessage(sock, chatId, { text: card('⏳ Sending birthday posts', 'Sending tonight’s posts to the Main Group now…') });
+        const msgKey = await sendRepMessage(sock, chatId, { text: card('⏳ උපන්දින පෝස්ටු යවමින් පවතී', 'අද රාත්‍රී 12:00 ට නියමිත පෝස්ටු දැන් Main Group එකට යවමින් පවතී…') });
         if (dispatchNowFunction) {
           const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toLocaleDateString('en-CA', { timeZone: TIMEZONE });
           const count = await dispatchNowFunction(tomorrow);
-          await sendRepMessage(sock, chatId, { text: card('✅ Dispatch complete', `📅 ${formatDate(tomorrow)}\n📤 *Sent to Main Group: ${count || 0}*`, 'Successfully sent posts will not be sent again at midnight.'), edit: msgKey.key });
+          await sendRepMessage(sock, chatId, { text: card('✅ යැවීමේ පරීක්ෂාව අවසන්', `📅 ${formatDate(tomorrow)}\n📤 *Main Group එකට යැවූ පෝස්ටු · ${count || 0}*`, 'සාර්ථකව යැවූ පෝස්ටු රාත්‍රී 12:00 ට නැවත යැවෙන්නේ නැත.\nයැවීමට ඉතිරි පෝස්ටු බැලීමට: `/list`'), edit: msgKey.key });
         } else {
-          await sendRepMessage(sock, chatId, { text: card('⏳ Dispatch not ready', 'Please wait a moment and try `/dispatch` again.\nNo posts were sent.'), edit: msgKey.key });
+          await sendRepMessage(sock, chatId, { text: card('⏳ යැවීම තවම සූදානම් නැත', 'මඳ වේලාවකින් නැවත `/dispatch` භාවිත කරන්න.\nකිසිදු පෝස්ටුවක් යවා නැත.'), edit: msgKey.key });
         }
       }
       break;
 
     case '/pause':
       db.setBotPaused(true);
-      await sendRepMessage(sock, chatId, { text: card('⏸️ Bot paused', '📸 Flyer uploads are paused.\n🕛 Scheduled sending is paused.', 'Use `/resume` to continue.') });
+      await sendRepMessage(sock, chatId, { text: card('⏸️ Bot තාවකාලිකව නවතා ඇත', '📸 අලුත් ෆ්ලයර් ඇතුළත් කිරීම නවතා ඇත.\n🕛 ස්වයංක්‍රීය පෝස්ට් යැවීම නවතා ඇත.', 'නැවත ආරම්භ කිරීමට: `/resume`') });
       break;
 
     case '/clear-form':
       db.clearFormSubmissions();
-      await sendRepMessage(sock, chatId, { text: card('🧹 Form entries cleared', 'All form submissions have been cleared, including completed designs.\nBirthday posts have not been removed.', 'You can now sync the form data from Google Sheets again.') });
+      await sendRepMessage(sock, chatId, { text: card('🧹 Form සටහන් ඉවත් කළා', 'නිම කළ ෆ්ලයර්වලට අදාළ සටහන් ඇතුළුව සියලු Form සටහන් ඉවත් කළා.\nඋපන්දින පෝස්ටු ඉවත් කර නැත.', 'දැන් Google Sheet එකෙන් Form දත්ත නැවත sync කළ හැක.') });
       break;
 
     case '/resume':
       db.setBotPaused(false);
-      await sendRepMessage(sock, chatId, { text: card('▶️ Bot resumed', '📸 Ready for new flyers.\n🕛 Scheduled sending is active.') });
+      await sendRepMessage(sock, chatId, { text: card('▶️ Bot නැවත ක්‍රියාත්මකයි', '📸 දැන් අලුත් ෆ්ලයර් upload කළ හැක.\n🕛 ස්වයංක්‍රීය පෝස්ට් යැවීම නැවත ක්‍රියාත්මකයි.') });
       break;
 
     default:
       if (cmd !== '/add' && cmd !== '/id') {
-          await sendRepMessage(sock, chatId, { text: card('❓ Invalid command', 'Use `/help` to see the available commands.') });
+          await sendRepMessage(sock, chatId, { text: card('❓ විධානය හඳුනාගත නොහැක', 'භාවිත කළ හැකි විධාන බැලීමට: `/help`') });
       }
       break;
   }
 }
 
 async function showHelpMenu(sock, chatId) {
-  const menu = card('🤖 Command guide',
-    '*📊 Design progress*\n`/status` — This month\n`/status next` — Next month\n`/status 10` — October',
-    '*📸 Add a birthday*\nUpload a finished flyer.\nIf AI cannot read it, upload it again with this caption:\n`/add Kasun Perera | 2026-10-20`\n\nUse the correct name and date. A flyer image is required.',
-    '*📋 View posts*\n`/list` or `/pending` — All posts waiting to be sent\n`/tonight` or `/today` — Upcoming midnight’s posts',
-    '*🛠️ Manage posts*\n`/cancel 18` — Remove post #18\n`/dispatch` — Send tonight’s posts immediately',
-    '*⏯️ Bot controls*\n`/pause` — Pause uploads and sending\n`/resume` — Resume both',
-    `🕛 All times: ${TIMEZONE_LABEL}`
+  const menu = card('🤖 Elama Bota — විධාන මාර්ගෝපදේශය',
+    '*📊 ෆ්ලයර්වල ප්‍රගතිය*\n`/status` — මේ මාසය\n`/status next` — ලබන මාසය\n`/status 10` — ඔක්තෝබර් මාසය',
+    '*📸 උපන්දින පෝස්ටුවක් ඇතුළත් කිරීම*\nනිම කළ ෆ්ලයර් එක upload කරන්න.\nඑය කියවාගත නොහැකි නම් පහත caption එක සමඟ නැවත upload කරන්න:\n`/add Kasun Perera | 2026-10-20`\n\nඋදාහරණය වෙනුවට නිවැරදි නම සහ දිනය යොදන්න. ෆ්ලයර් ඡායාරූපය අනිවාර්යයි.',
+    '*📋 පෝස්ටු බැලීම*\n`/list` හෝ `/pending` — යැවීමට ඉතිරි සියලු පෝස්ටු\n`/tonight` හෝ `/today` — අද රාත්‍රී 12:00 ට නියමිත පෝස්ටු',
+    '*🛠️ පෝස්ටු කළමනාකරණය*\n`/cancel 18` — #18 පෝස්ටුව ඉවත් කරන්න\n`/dispatch` — අද රාත්‍රී 12:00 ට නියමිත පෝස්ටු දැන්ම යවන්න',
+    '*⏯️ Bot පාලනය*\n`/pause` — ෆ්ලයර් ඇතුළත් කිරීම සහ පෝස්ට් යැවීම නවතන්න\n`/resume` — නැවත ආරම්භ කරන්න',
+    `🕛 සියලු වේලාවන්: ${TIMEZONE_LABEL}`
   );
   await sendRepMessage(sock, chatId, { text: menu });
 }
@@ -101,14 +101,14 @@ async function listPendingPosts(sock, chatId) {
   const pending = db.listPending();
   
   if (pending.length === 0) {
-    await sendRepMessage(sock, chatId, { text: card('📋 Birthday queue', 'No posts are waiting to be sent.', 'Upload a birthday flyer to add a post.') });
+    await sendRepMessage(sock, chatId, { text: card('📋 යැවීමට නියමිත පෝස්ටු', 'යැවීමට ඉතිරි පෝස්ටු නැත.', 'අලුත් පෝස්ටුවක් ඇතුළත් කිරීමට උපන්දින ෆ්ලයර් එක upload කරන්න.') });
     return;
   }
 
-  const msg = card('📋 Birthday queue',
-    `*Waiting to be sent: ${pending.length}*`,
+  const msg = card('📋 යැවීමට නියමිත පෝස්ටු',
+    `*යැවීමට ඉතිරි · ${pending.length}*`,
     ...pending.map(p => postDetails(p.name, p.birthday, p.id)),
-    `🕛 Scheduled for 12:00 AM · ${TIMEZONE_LABEL}\nTo remove a post: \`/cancel [ID]\``
+    `🕛 උපන්දිනයේ 12:00 AM · ${TIMEZONE_LABEL}\nපෝස්ටුවක් ඉවත් කිරීමට: \`/cancel [ID]\``
   );
   await sendRepMessage(sock, chatId, { text: msg });
 }
@@ -118,14 +118,14 @@ async function showTonightBirthdays(sock, chatId) {
   const todaysPosts = db.getPendingForToday(tomorrow);
 
   if (todaysPosts.length === 0) {
-    await sendRepMessage(sock, chatId, { text: card('🌙 Tonight’s posts', `📅 ${formatDate(tomorrow)} · 12:00 AM\n🕛 ${TIMEZONE_LABEL}`, 'No posts are scheduled for this date.\nUse `/status` to check for missing designs.') });
+    await sendRepMessage(sock, chatId, { text: card('🌙 අද රාත්‍රියේ පෝස්ටු', `📅 ${formatDate(tomorrow)} · 12:00 AM\n📍 Main Group · ${TIMEZONE_LABEL}`, 'මෙම දිනයට පෝස්ටු ඇතුළත් කර නැත.\nසැකසිය යුතු ෆ්ලයර් බැලීමට: `/status`') });
     return;
   }
 
-  const msg = card('🌙 Tonight’s posts',
+  const msg = card('🌙 අද රාත්‍රියේ පෝස්ටු',
     `📅 ${formatDate(tomorrow)} · 12:00 AM\n📍 Main Group · ${TIMEZONE_LABEL}`,
-    `*Ready to send: ${todaysPosts.length}*\n${todaysPosts.map(p => `• ${p.name} · #${p.id}`).join('\n')}`,
-    'These posts are scheduled to send automatically.\nUse `/dispatch` to send them early, right now.'
+    `*යැවීමට සූදානම් · ${todaysPosts.length}*\n${todaysPosts.map(p => `• ${p.name} · #${p.id}`).join('\n')}`,
+    'මෙම පෝස්ටු අද රාත්‍රී 12:00 ට ස්වයංක්‍රීයව යැවේ.\nඊට පෙර දැන්ම යැවීමට: `/dispatch`'
   );
   await sendRepMessage(sock, chatId, { text: msg });
 }
@@ -133,13 +133,13 @@ async function showTonightBirthdays(sock, chatId) {
 async function cancelPost(sock, chatId, idStr) {
   const id = parseInt(idStr, 10);
   if (isNaN(id)) {
-    await sendRepMessage(sock, chatId, { text: card('⚠️ Invalid post ID', 'Use the number shown in `/list`.', '*Example*\n`/cancel 18`') });
+    await sendRepMessage(sock, chatId, { text: card('⚠️ පෝස්ට් අංකය වැරදියි', '`/list` මඟින් පෙන්වන අංකය යොදන්න.', '*උදාහරණය*\n`/cancel 18`') });
     return;
   }
 
   const post = db.getPostById(id);
   if (!post || post.status !== 'pending') {
-    await sendRepMessage(sock, chatId, { text: card('🔎 Post not found', `Could not find a pending post with ID #${id}.`, 'Use `/list` to see posts waiting to be sent.') });
+    await sendRepMessage(sock, chatId, { text: card('🔎 පෝස්ටුව හමු නොවීය', `යැවීමට ඉතිරි පෝස්ටු අතර #${id} පෝස්ටුව හමු නොවීය.`, 'යැවීමට ඉතිරි පෝස්ටු බැලීමට: `/list`') });
     return;
   }
 
@@ -151,11 +151,11 @@ async function cancelPost(sock, chatId, idStr) {
         fs.unlinkSync(post.image_path);
       } catch (err) {}
     }
-    const cancelMsg = card('🗑️ Birthday cancelled', postDetails(post.name, post.birthday, id), 'Removed from the queue. This post will not be sent.');
+    const cancelMsg = card('🗑️ උපන්දින පෝස්ටුව අවලංගු කළා', postDetails(post.name, post.birthday, id), 'යැවීමේ ලැයිස්තුවෙන් ඉවත් කළා. මෙම පෝස්ටුව යැවෙන්නේ නැත.');
     await sendRepMessage(sock, chatId, { text: cancelMsg });
     console.log(`[Commands] Canceled post ID: ${id} and deleted image.`);
   } else {
-    await sendRepMessage(sock, chatId, { text: card('🔎 Post not found', `Could not find a pending post with ID #${id}.`, 'Use `/list` to see posts waiting to be sent.') });
+    await sendRepMessage(sock, chatId, { text: card('⚠️ පෝස්ටුව ඉවත් කළ නොහැක', `#${id} පෝස්ටුව යවමින් තිබිය හැක, දැනටමත් යවා තිබිය හැක හෝ යැවීමේ තත්ත්වය තහවුරු වී නැති විය හැක.`, 'නැවත උත්සාහ කිරීමට පෙර පරිපාලකයාගෙන් තත්ත්වය තහවුරු කරගන්න.\nපෝස්ටු බැලීමට: `/list`') });
   }
 }
 
@@ -172,16 +172,16 @@ async function showDesignStatus(sock, chatId, argMonth) {
   }
 
   if (targetMonth === 'NaN' || targetMonth.length !== 2) {
-    return await sendRepMessage(sock, chatId, { text: card('⚠️ Invalid month', 'Use `/status` for this month, `/status next` for next month, or `/status 10` for October.') });
+    return await sendRepMessage(sock, chatId, { text: card('⚠️ මාසය නිවැරදිව සඳහන් කරන්න', 'මේ මාසයට `/status`, ලබන මාසයට `/status next`, හෝ ඔක්තෝබර් මාසයට `/status 10` භාවිත කරන්න.') });
   }
 
-  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-  const monthName = monthNames[Number(targetMonth) - 1] || `Month ${targetMonth}`;
+  const monthNames = ['ජනවාරි', 'පෙබරවාරි', 'මාර්තු', 'අප්‍රේල්', 'මැයි', 'ජූනි', 'ජූලි', 'අගෝස්තු', 'සැප්තැම්බර්', 'ඔක්තෝබර්', 'නොවැම්බර්', 'දෙසැම්බර්'];
+  const monthName = monthNames[Number(targetMonth) - 1] || `${targetMonth}`;
   const submissions = db.getFormSubmissionsByMonth(`-${targetMonth}-`);
   const manuals = db.getManualAdditionsByMonth(`-${targetMonth}-`);
 
   if (submissions.length === 0 && manuals.length === 0) {
-    return await sendRepMessage(sock, chatId, { text: card(`📊  ${monthName} birthdays`, 'No form entries or birthday posts found for this month.') });
+    return await sendRepMessage(sock, chatId, { text: card(`📊 ${monthName} මාසයේ උපන්දින`, 'මෙම මාසයට Form සටහන් හෝ උපන්දින පෝස්ටු හමු නොවීය.') });
   }
 
   const designed = submissions.filter(s => s.status === 'designed');
@@ -191,11 +191,11 @@ async function showDesignStatus(sock, chatId, argMonth) {
     const shortDate = formatDate(s.birthday).replace(/ \d{4}$/, '');
     return `${shortDate}  ›  ${s.name.trim().replace(/\s+/g, ' ')}`;
   }).join('\n');
-  const msg = card(`📊  ${monthName} birthdays`,
-    `✅ *FLYERS COMPLETED · ${designed.length}*\nGoogle Sheet\n\n${entries(designed) || 'None yet.'}`,
-    `⚠️ *FLYERS NEEDED · ${pending.length}*\nGoogle Sheet\n\n${entries(pending) || 'All caught up! 🎉'}`,
-    `➕ *ADDITIONAL BIRTHDAYS · ${manuals.length}*\nNot in Google Sheet\n\n${entries(manuals) || 'None.'}`,
-    '━━━━━━━━━━━━━━\nView posts waiting to be sent: `/list`'
+  const msg = card(`📊 ${monthName} මාසයේ උපන්දින`,
+    `✅ *නිම කළ ෆ්ලයර් · ${designed.length}* (Google Sheet)\n${entries(designed) || 'තවමත් නැත.'}`,
+    `⚠️ *සැකසිය යුතු ෆ්ලයර් · ${pending.length}* (Google Sheet)\n${entries(pending) || 'සියල්ල සූදානම්! 🎉'}`,
+    `➕ *වෙනත් උපන්දින · ${manuals.length}* (Google Sheet හි නැති)\n${entries(manuals) || 'වෙනත් උපන්දින නැත.'}`,
+    `${SEPARATOR}\nයැවීමට නියමිත පෝස්ටු බැලීමට: \`/list\``
   );
   await sendRepMessage(sock, chatId, { text: msg });
 }

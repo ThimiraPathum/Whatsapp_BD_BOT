@@ -80,7 +80,7 @@ for (const count of [0,1,3]) test(`21:00 preview exactly once with ${count} birt
     await h.manager.check(); await h.manager.check();
     assert.equal(h.sends.length,1); assert.equal(h.sends[0].chat,'rep');
     assert.match(h.sends[0].content.text,/01 Nov 2026/);
-    assert.match(h.sends[0].content.text,new RegExp(`Ready to send · ${count}`));
+    assert.match(h.sends[0].content.text,new RegExp(`යැවීමට සූදානම් · ${count}`));
   } finally {h.close();}
 });
 test('unfinished forms still warn; successful preview is not repeated on restart', async()=>{
@@ -230,7 +230,7 @@ test('update confirmation sends only to Reps at 10 AM and is not repeated after 
     h.restart(config); await h.manager.check(); assert.equal(h.sends.length, 0);
     h.time('2026-11-02T04:30:00Z'); await h.manager.check(); await h.manager.check();
     assert.equal(h.sends.length, 1); assert.equal(h.sends[0].chat, 'rep');
-    assert.match(h.sends[0].content.text, /Birthday Bot updated successfully!/);
+    assert.match(h.sends[0].content.text, /Birthday Bot යාවත්කාලීන කළා/);
     h.restart(config); await h.manager.check(); assert.equal(h.sends.length, 1);
     assert.equal(h.manager.health().updateNotice.result.state, 'completed');
   } finally { h.close(); }

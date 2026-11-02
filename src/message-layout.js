@@ -1,10 +1,10 @@
 'use strict';
 
-const SEPARATOR = '━━━━━━━━━━━━━━';
+const SEPARATOR = '━━━━━━━━━━━━';
 
 // Native WhatsApp formatting with a compact heading and open section layout.
 function card(title, ...sections) {
-  const heading = title.trim().replace(/^(\S+)\s+/, '$1  ').toUpperCase();
+  const heading = title.trim().replace(/^(\S+)\s+/, '$1  ');
   return [`*${heading}*\n${SEPARATOR}`, ...sections.filter(Boolean)].join('\n\n');
 }
 

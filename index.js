@@ -1,7 +1,7 @@
 'use strict';
 
 const { sendRepMessage } = require('./src/rep-messages');
-const { card, formatDate, postDetails, SEPARATOR } = require('./src/message-layout');
+const { card, formatDate, postDetails } = require('./src/message-layout');
 
 /**
  * index.js — WhatsApp Birthday Bot (Baileys)
@@ -73,7 +73,7 @@ app.post('/api/submit-form', async (req, res) => {
     const submissionMonth = birthday.split('-')[1];
 
     if (submissionMonth === currentMonth && connection.getSocket() && process.env.REP_GROUP_ID) {
-      const alertMsg = card('📥 New birthday form', postDetails(name, birthday), '*This month’s birthday*\nPlease design and upload the flyer as soon as possible.', `📷 *Photo*\n${photoUrl}`);
+      const alertMsg = card('📥 අලුත් උපන්දින Form එකක් ලැබුණා', postDetails(name, birthday), '*මේ මාසයේ උපන්දිනයකි*\nහැකි ඉක්මනින් ෆ්ලයර් එක නිර්මාණය කර upload කරන්න.', `📷 *ඡායාරූපය*\n${photoUrl}`);
       await sendRepMessage(connection.getSocket(), process.env.REP_GROUP_ID, { text: alertMsg });
     }
 
@@ -96,7 +96,7 @@ process.on('uncaughtException', async (err) => {
   if (globalSock && REP_GROUP_ID) {
     try {
       await sendRepMessage(globalSock, REP_GROUP_ID, {
-        text: card('🚨 Critical error', 'The bot encountered a fatal error and is stopping.', `*Error*\n${err.message}`, 'Check the server logs. PM2 will restart the bot if configured to do so.')
+        text: card('🚨 Bot ක්‍රියාකාරීත්වයේ දෝෂයක්', 'බරපතළ දෝෂයක් නිසා Bot නතර වෙමින් පවතී.', `*දෝෂය*\n${err.message}`, 'පරිපාලකයා දැනුවත් කරන්න. Server logs පරීක්ෂා කළ යුතුය. ස්වයංක්‍රීය restart සකසා ඇත්නම් PM2 මඟින් නැවත ආරම්භ වේ.')
       });
     } catch (e) {
       console.error('[Fatal Error] Could not send WhatsApp crash alert:', e.message);
@@ -112,7 +112,7 @@ process.on('unhandledRejection', async (reason, promise) => {
       // Stringify reason to avoid object [Object object]
       const reasonText = reason instanceof Error ? reason.message : String(reason);
       await sendRepMessage(globalSock, REP_GROUP_ID, {
-        text: card('🚨 Critical error', 'The bot encountered an unhandled error and is stopping.', `*Reason*\n${reasonText}`, 'Check the server logs. PM2 will restart the bot if configured to do so.')
+        text: card('🚨 Bot ක්‍රියාකාරීත්වයේ දෝෂයක්', 'හැසිරවිය නොහැකි දෝෂයක් නිසා Bot නතර වෙමින් පවතී.', `*හේතුව*\n${reasonText}`, 'පරිපාලකයා දැනුවත් කරන්න. Server logs පරීක්ෂා කළ යුතුය. ස්වයංක්‍රීය restart සකසා ඇත්නම් PM2 මඟින් නැවත ආරම්භ වේ.')
       });
     } catch (e) {
       console.error('[Fatal Error] Could not send WhatsApp crash alert:', e.message);
@@ -199,7 +199,7 @@ const connection = createConnectionManager({
             if (post && post.image_path && fs.existsSync(post.image_path)) {
               try { fs.unlinkSync(post.image_path); } catch (e) {}
             }
-            const deletedMsg = card('🗑️ Post cancelled', postDetails(post ? post.name : 'Unknown', post?.birthday, reactionData.postId), 'Removed from the queue. This post will not be sent.');
+            const deletedMsg = card('🗑️ පෝස්ටුව අවලංගු කළා', postDetails(post ? post.name : 'නම නොදනී', post?.birthday, reactionData.postId), 'යැවීමේ ලැයිස්තුවෙන් ඉවත් කළා. මෙම පෝස්ටුව යැවෙන්නේ නැත.');
             
             if (reactionData.originalKey) {
               await sendRepMessage(sock, msg.key.remoteJid, { text: deletedMsg, edit: reactionData.originalKey });
@@ -248,7 +248,7 @@ async function dispatchApprovedPost(sock, postId, repChatId, editKey = null) {
   try {
     if (!await schedulerManager.sendPost(postId)) throw new Error('Delivery needs review or is paused');
 
-    const dispatchMsg = card('✅ Birthday sent', postDetails(post.name, post.birthday, postId), 'Delivered to the Main Group.');
+    const dispatchMsg = card('✅ උපන්දින පෝස්ටුව යැවුවා', postDetails(post.name, post.birthday, postId), 'Main Group එකට සාර්ථකව යැවුවා.');
     if (editKey) {
       await sendRepMessage(sock, repChatId, { text: dispatchMsg, edit: editKey });
     } else {
@@ -256,7 +256,7 @@ async function dispatchApprovedPost(sock, postId, repChatId, editKey = null) {
     }
   } catch (err) {
     console.error('[Bot] Poll dispatch failed:', err);
-    const failureMsg = card('⚠️ Dispatch failed', `🆔 Post #${postId}`, 'The immediate send could not be completed. Check the post status and connection before retrying.', 'View pending posts: `/list`');
+    const failureMsg = card('⚠️ යැවීම තහවුරු කළ නොහැක', `🆔 Post #${postId}`, 'දැන්ම යැවීම සම්පූර්ණ වූ බව තහවුරු කළ නොහැක. නැවත උත්සාහ කිරීමට පෙර පෝස්ටුවේ තත්ත්වය සහ connection එක පරීක්ෂා කරන්න.', 'යැවීමට ඉතිරි පෝස්ටු බැලීමට: `/list`');
     if (editKey) {
       await sendRepMessage(sock, repChatId, { text: failureMsg, edit: editKey });
     } else {
@@ -283,7 +283,7 @@ async function handleIncomingMessage(msg) {
     '';
 
   if (body.trim() === '/id') {
-    await sendRepMessage(sock, chatId, { text: card('📌 Chat ID', chatId) }, { quoted: msg });
+    await sendRepMessage(sock, chatId, { text: card('📌 මෙම chat එකේ ID', chatId) }, { quoted: msg });
     return;
   }
 
@@ -300,7 +300,7 @@ async function handleIncomingMessage(msg) {
 
   // 2. ෆොටෝ එකක් නැතුව නිකම්ම /add ගැහුවොත් බ්ලොක් කිරීම
   if (trimmed.startsWith('/add') && !hasImage) {
-    const flyerMissingMsg = card('📸 Flyer required', 'Attach the flyer image and add the name and birthday in its caption.', '*Caption example*\n`/add Kasun Perera | 2026-10-20`', 'Replace the example name and date. Text-only posts cannot be scheduled.');
+    const flyerMissingMsg = card('📸 ෆ්ලයර් එක අවශ්‍යයි', 'ෆ්ලයර් ඡායාරූපය සමඟ නම සහ උපන්දිනය caption එකේ යොදන්න.', '*Caption උදාහරණය*\n`/add Kasun Perera | 2026-10-20`', 'උදාහරණය වෙනුවට නිවැරදි නම සහ දිනය යොදන්න. ඡායාරූපයක් නොමැතිව පෝස්ටුවක් ඇතුළත් කළ නොහැක.');
     await sendRepMessage(sock, chatId, { text: flyerMissingMsg }, { quoted: msg });
     return;
   }
@@ -310,7 +310,7 @@ async function handleIncomingMessage(msg) {
 
   // 4. Bot Pause කරලා තියෙනවද කියලා බලනවා
   if (db.isBotPaused()) {
-    await sendRepMessage(sock, chatId, { text: card('⏸️ Bot is currently paused', 'This flyer has not been scheduled.', '*Next step*\nUse `/resume`, then upload the flyer again.') }, { quoted: msg });
+    await sendRepMessage(sock, chatId, { text: card('⏸️ Bot තාවකාලිකව නවතා ඇත', 'මෙම ෆ්ලයර් එක පෝස්ටුවක් ලෙස ඇතුළත් කර නැත.', '*ඊළඟ පියවර*\n`/resume` භාවිත කර ෆ්ලයර් එක නැවත upload කරන්න.') }, { quoted: msg });
     return;
   }
 
@@ -326,7 +326,7 @@ async function handleIncomingMessage(msg) {
     const content = trimmed.replace('/add', '').trim();
     const parts = content.split('|').map((p) => p.trim());
     if (parts.length < 2) {
-      const invalidFormatMsg = card('⚠️ Invalid caption format', 'Upload the flyer again with the name and date separated by `|`.', '*Caption example*\n`/add Kasun Perera | 2026-10-20`', 'Replace the example name and date. Use YYYY-MM-DD for the date.');
+      const invalidFormatMsg = card('⚠️ Caption ආකාරය වැරදියි', 'නම සහ දිනය අතර `|` යොදා ෆ්ලයර් එක නැවත upload කරන්න.', '*Caption උදාහරණය*\n`/add Kasun Perera | 2026-10-20`', 'උදාහරණය වෙනුවට නිවැරදි නම සහ දිනය යොදන්න. දිනය YYYY-MM-DD ආකාරයට සඳහන් කරන්න.');
       await sendRepMessage(sock, chatId, { text: invalidFormatMsg }, { quoted: msg });
       return;
     }
@@ -339,9 +339,9 @@ async function handleIncomingMessage(msg) {
   // Loading Message
   let loadingMsg;
   if (!isManualAdd) {
-    loadingMsg = await sendRepMessage(sock, chatId, { text: card('🔍 Analysing flyer', 'Reading the name and birthday date…') }, { quoted: msg });
+    loadingMsg = await sendRepMessage(sock, chatId, { text: card('🔍 ෆ්ලයර් එක පරීක්ෂා කෙරේ', 'ෆ්ලයර් එකේ සඳහන් නම සහ උපන්දිනය කියවමින් පවතී…') }, { quoted: msg });
   } else {
-    loadingMsg = await sendRepMessage(sock, chatId, { text: card('⚙️ Processing manual entry', 'Saving your flyer and caption details…') }, { quoted: msg });
+    loadingMsg = await sendRepMessage(sock, chatId, { text: card('⚙️ පෝස්ටුව ඇතුළත් කරමින් පවතී', 'ෆ්ලයර් එක සහ caption එකේ සඳහන් තොරතුරු සුරකිමින් පවතී…') }, { quoted: msg });
   }
 
   // Helper to Edit Loading Message (Prevents "Message Deleted" tombstones)
@@ -370,7 +370,7 @@ async function handleIncomingMessage(msg) {
     console.log(`[Bot] ✅ Image downloaded to: ${imagePath}`);
   } catch (err) {
     console.error('[Bot] Download failed:', err.message);
-    await editLoading(card('⚠️ Could not download image', 'The birthday has not been scheduled.', '*Next step*\nUpload the image again.'));
+    await editLoading(card('⚠️ ඡායාරූපය ලබාගත නොහැක', 'උපන්දින පෝස්ටුව ඇතුළත් කර නැත.', '*ඊළඟ පියවර*\nෆ්ලයර් ඡායාරූපය නැවත upload කරන්න.'));
     return;
   }
 
@@ -381,14 +381,14 @@ async function handleIncomingMessage(msg) {
     try { await sock.sendPresenceUpdate('paused', chatId); } catch (e) {}
     if (!details || (details.status && details.status !== 'OK' && details.status !== 'IGNORE')) {
       if (fs.existsSync(imagePath)) fs.unlinkSync(imagePath);
-      const aiFailedMsg = card('⚠️ Could not read flyer', 'The name or birthday date could not be read. Nothing has been scheduled.', '*Next step*\nUpload the flyer again with this caption:', '`/add Kasun Perera | 2026-10-20`\nReplace the example with the correct name and date.');
+      const aiFailedMsg = card('⚠️ ෆ්ලයර් එක කියවාගත නොහැක', 'මෙහි නම හෝ උපන්දිනය නිවැරදිව හඳුනාගැනීමට නොහැකි විය. පෝස්ටුව ඇතුළත් කර නැත.', '*ඊළඟ පියවර*\nපහත ආකාරයට caption එකක් සමඟ ෆ්ලයර් එක නැවත upload කරන්න:', '`/add Kasun Perera | 2026-10-20`\nඋදාහරණය වෙනුවට නිවැරදි නම සහ දිනය (YYYY-MM-DD) යොදන්න.');
       await editLoading(aiFailedMsg);
       return;
     }
     
     if (details.status === 'IGNORE') {
       if (fs.existsSync(imagePath)) fs.unlinkSync(imagePath);
-      await editLoading(card('📷 Raw photo detected', 'This looks like a regular photo. No birthday post was scheduled.', 'Upload the completed birthday flyer when it is ready.'));
+      await editLoading(card('📷 මෙය සාමාන්‍ය ඡායාරූපයකි', 'මෙය නිම කළ උපන්දින ෆ්ලයර් එකක් නොවන බැවින් පෝස්ටුවක් ලෙස ඇතුළත් කර නැත.', '*ඊළඟ පියවර*\nඋපන්දින ෆ්ලයර් එක නිර්මාණය කර අවසන් වූ පසු නැවත upload කරන්න.'));
       return;
     }
 
@@ -399,7 +399,7 @@ async function handleIncomingMessage(msg) {
   // Duplicate Check
   if (db.postExists({ name, birthday })) {
     if (fs.existsSync(imagePath)) fs.unlinkSync(imagePath);
-    const duplicateMsg = card('👀 Already scheduled', postDetails(name, birthday), 'A matching birthday is already in the queue. No duplicate was added.', 'View the queue: `/list`');
+    const duplicateMsg = card('👀 මෙම උපන්දිනය දැනටමත් ඇතුළත් කර ඇත', postDetails(name, birthday), 'මෙම නම සහ දිනයට ගැළපෙන පෝස්ටුවක් දැනටමත් ඇත. නැවත ඇතුළත් කර නැත.', 'යැවීමට ඉතිරි පෝස්ටු බැලීමට: `/list`');
     await editLoading(duplicateMsg);
     return;
   }
@@ -418,21 +418,20 @@ async function handleIncomingMessage(msg) {
 
   if (birthday === today) {
     try {
-      const urgentMsg = card('🎂 Birthday today', postDetails(name, birthday, id), '*Send to the Main Group now?*\n👍 Send now\n❌ Cancel this post', 'React to this message to choose. Approval is needed for immediate sending.');
+      const urgentMsg = card('🎂 අද උපන්දිනයකි — අනුමැතිය අවශ්‍යයි', `👤 *${name.trim()}*\n📅 ${formatDate(birthday)} (අද)\n📍 Main Group · Post #${id}`, '*මෙය දැන්ම Main Group එකට යවන්නද?*\n👍 — දැන්ම යවන්න\n❌ — පෝස්ටුව අවලංගු කරන්න', 'තෝරාගැනීමට මෙම පණිවිඩයට react කරන්න. ඔබ අනුමත කරන තෙක් මෙය නොයවනු ඇත.');
       
       await editLoading(urgentMsg);
       reactionCache.set(loadingMsg.key.id, { postId: id, originalKey: loadingMsg.key });
     } catch (err) {
       console.error('[Bot] Failed to send reaction message:', err);
-      await editLoading(card('⚠️ Could not request approval', `The birthday was saved as post #${id}.`, 'Check `/list` before uploading again.'));
+      await editLoading(card('⚠️ අනුමැතිය ඉල්ලා සිටිය නොහැකි විය', `උපන්දිනය #${id} පෝස්ටුව ලෙස සුරැකී ඇත.`, 'නැවත upload කිරීමට පෙර `/list` පරීක්ෂා කර පරිපාලකයා දැනුවත් කරන්න.'));
     }
   } else {
     // අනාගත උපන්දිනයක් නම් ෂෙඩියුල් කිරීම
-    const futureMsg = card('🎂 Birthday confirmed',
-      `*${name.trim()}* ✨`,
-      `📅  ${formatDate(birthday, 'long')}\n🕛  12:00 AM · ${TIMEZONE === 'Asia/Colombo' ? 'Sri Lanka' : TIMEZONE}\n📍  Main Group`,
-      '✅ Saved and ready for automatic sending.',
-      `${SEPARATOR}\nPOST #${id}  •  Cancel: \`/cancel ${id}\``
+    const futureMsg = card('🎂 උපන්දින පෝස්ටුව සූදානම්',
+      `👤 *${name.trim()}*\n📅 ${formatDate(birthday)} · 12:00 AM (${TIMEZONE === 'Asia/Colombo' ? 'SL Time' : TIMEZONE})\n📍 Main Group · Post #${id}`,
+      '✅ සාර්ථකව ඇතුළත් කළා. නියමිත දින රාත්‍රී 12:00 ට ස්වයංක්‍රීයව Main Group එකට යැවේ.',
+      `ඉවත් කිරීමට: \`/cancel ${id}\``
     );
     await editLoading(futureMsg);
   }

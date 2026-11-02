@@ -183,7 +183,7 @@ function createManager({ db, getSocket, mainGroupId, repGroupId, timezone = 'Asi
         const key = `update-notice:${new Date(noticeTime).toISOString()}`;
         if (clock().getTime() < noticeTime + 15 * 60000) {
           await deliver(key, 'update-notice', socket => socket.sendMessage(repGroupId, {
-            text: '✅ Birthday Bot updated successfully!\n\nThis scheduled test message confirms the bot is connected and can send automatic messages. 🤖'
+            text: '*✅  Birthday Bot යාවත්කාලීන කළා*\n━━━━━━━━━━━━\n\nමෙම නියමිත වේලාවට යැවූ පරීක්ෂණ පණිවිඩයෙන් Bot සම්බන්ධ වී ඇති බවත් ස්වයංක්‍රීය පණිවිඩ යැවීම ක්‍රියාත්මක බවත් තහවුරු වේ.'
           }));
         } else if (!state(key) || ['pending', 'retryable'].includes(state(key).state)) {
           ensure(key, 'update-notice'); update(key, 'expired', 'Update confirmation window elapsed');
@@ -208,7 +208,7 @@ function createManager({ db, getSocket, mainGroupId, repGroupId, timezone = 'Asi
       const unresolved = sql.prepare('SELECT COUNT(*) AS n FROM scheduler_alerts').get().n;
       if (unresolved && adminAlertJid && adminAlertJid !== repGroupId && adminAlertJid !== mainGroupId) {
         await deliver(`admin-alert:${now.date}`, 'alert', socket => socket.sendMessage(adminAlertJid, {
-          text: `Scheduler needs review: ${unresolved} unresolved alert(s). Check the protected /health endpoint and server logs. No uncertain deliveries will be retried automatically.`
+          text: `*⚠️  ස්වයංක්‍රීය යැවීම පරීක්ෂා කළ යුතුයි*\n━━━━━━━━━━━━\n\nවිසඳීමට ඉතිරි දැනුම්දීම් · ${unresolved}\n\nආරක්ෂිත /health endpoint එක සහ server logs පරීක්ෂා කරන්න. යැවුණාදැයි තහවුරු නැති පණිවිඩ ස්වයංක්‍රීයව නැවත යවන්නේ නැත.`
         }));
       }
     } catch (err) { alert('scheduler:check', 'Scheduler check failed'); }
